@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { documents } from '../../api/endpoints'
 import { Button, Card, ErrorBox, Input, Label } from '../../components/ui'
 import { PartySelect } from '../../components/PartySelect'
-import { money } from '../../lib/format'
+import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
 
 type Item = { description: string; quantity: string; unit_price: string; tax_rate: string }
@@ -22,7 +22,7 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
 }) {
   const nav = useNavigate()
   const [party, setParty] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayDubai())
   const [original, setOriginal] = useState('')
   const [narration, setNarration] = useState('')
   const [items, setItems] = useState<Item[]>([blank()])

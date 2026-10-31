@@ -4,7 +4,7 @@ import { api } from '../../api/client'
 import { Account, accounts, documents } from '../../api/endpoints'
 import { PartySelect } from '../../components/PartySelect'
 import { Button, Card, ErrorBox, Input, Label, Select } from '../../components/ui'
-import { money } from '../../lib/format'
+import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
 
 type Open = { id: number; number: string; due_date: string; outstanding: string }
@@ -13,7 +13,7 @@ type Open = { id: number; number: string; due_date: string; outstanding: string 
 export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payments'; partyKind: 'customer' | 'supplier'; title: string }) {
   const nav = useNavigate()
   const [cashAccounts, setCash] = useState<Account[]>([])
-  const [f, setF] = useState({ party: '', cash_account: '', amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', reference: '', narration: '' })
+  const [f, setF] = useState({ party: '', cash_account: '', amount: '', date: todayDubai(), method: 'cash', reference: '', narration: '' })
   const [open, setOpen] = useState<Open[]>([])
   const [alloc, setAlloc] = useState<Record<number, string>>({})
   const up = (patch: Partial<typeof f>) => setF({ ...f, ...patch })

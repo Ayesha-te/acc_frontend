@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Account, accounts, documents } from '../../api/endpoints'
 import { Button, Card, ErrorBox, Input, Label, Select } from '../../components/ui'
-import { money } from '../../lib/format'
+import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
 
 type Line = { account: string; debit: string; credit: string; description: string }
@@ -11,7 +11,7 @@ const blank = (): Line => ({ account: '', debit: '', credit: '', description: ''
 export function VoucherForm({ type }: { type: 'general' | 'journal' | 'contra' }) {
   const nav = useNavigate()
   const [accts, setAccts] = useState<Account[]>([])
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
+  const [date, setDate] = useState(todayDubai())
   const [narration, setNarration] = useState('')
   const [lines, setLines] = useState<Line[]>([blank(), blank()])
   useEffect(() => { accounts.list().then((a) => setAccts(type === 'contra' ? a.filter((x) => x.is_cash_bank) : a)) }, [type])
