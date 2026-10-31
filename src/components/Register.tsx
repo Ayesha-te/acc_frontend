@@ -8,15 +8,25 @@ export type Column = { key: string; label: string; align?: 'right'; render?: (ro
 
 const PAGE_SIZE = 25
 
-/** Config-driven paged register. The server does all filtering/pagination; one page is in the browser at a time. */
-export function Register({ title, path, columns, createTo, extraQuery, canWrite }: {
+type RegisterProps = {
   title: string
   path: string
   columns: Column[]
   createTo?: string
   extraQuery?: Record<string, string>
   canWrite: boolean
-}) {
+}
+
+/**
+ * Config-driven paged register. The server does all filtering/pagination; one page is in the browser at a time.
+ * Keyed by data source so search/date/page state never leaks from one register into another (React would
+ * otherwise reuse this component instance when navigating between routes that render the same component).
+ */
+export function Register(props: RegisterProps) {
+  return <RegisterView key={`${props.path}?${JSON.stringify(props.extraQuery ?? {})}`} {...props} />
+}
+
+function RegisterView({ title, path, columns, createTo, extraQuery, canWrite }: RegisterProps) {
   const [rows, setRows] = useState<any[]>([])
   const [count, setCount] = useState(0)
   const [page, setPage] = useState(1)

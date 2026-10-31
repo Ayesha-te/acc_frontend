@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { documents } from '../../api/endpoints'
-import { Button, Card, ErrorBox, Input, Label } from '../../components/ui'
+import { Button, Card, ErrorBox, Input, Label, Select } from '../../components/ui'
 import { PartySelect } from '../../components/PartySelect'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
@@ -26,6 +26,21 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
   const [original, setOriginal] = useState('')
   const [narration, setNarration] = useState('')
   const [items, setItems] = useState<Item[]>([blank()])
+  const [invoices, setInvoices] = useState<{ id: number; number: string; date: string; total: string }[]>([])
+  const [loadingInvoices, setLoadingInvoices] = useState(false)
+
+  // Returns pick the original from the selected party's posted invoices (the server still validates the limit).
+  useEffect(() => {
+    setOriginal('')
+    setInvoices([])
+    if (kind !== 'return' || !party) return
+    let live = true
+    setLoadingInvoices(true)
+    documents(path).list({ party, kind: 'invoice', status: 'posted', ordering: '-date', page_size: 200 })
+      .then((r) => live && setInvoices(r.results))
+      .finally(() => live && setLoadingInvoices(false))
+    return () => { live = false }
+  }, [kind, party, path])
 
   const set = (i: number, patch: Partial<Item>) => setItems(items.map((it, j) => (j === i ? { ...it, ...patch } : it)))
   const net = items.reduce((s, it) => s + Number(it.quantity || 0) * Number(it.unit_price || 0), 0)
@@ -45,7 +60,14 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
         <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={party} onChange={setParty} /></Label>
         <Label text="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Label>
         {kind === 'return' && (
-          <Label text="Original invoice ID"><Input type="number" value={original} onChange={(e) => setOriginal(e.target.value)} required /></Label>
+          <Label text="Original invoice">
+            <Select value={original} onChange={(e) => setOriginal(e.target.value)} required disabled={!party || loadingInvoices}>
+              <option value="">
+                {!party ? `Select a ${partyKind} first` : loadingInvoices ? 'Loading…' : invoices.length ? 'Select invoice…' : `No posted invoices for this ${partyKind}`}
+              </option>
+              {invoices.map((inv) => <option key={inv.id} value={inv.id}>{inv.number} · {inv.date} · {money(inv.total)}</option>)}
+            </Select>
+          </Label>
         )}
         <div className="sm:col-span-3"><Label text="Narration"><Input value={narration} onChange={(e) => setNarration(e.target.value)} /></Label></div>
       </Card>
