@@ -1,5 +1,5 @@
 // Single HTTP entry point. Feature modules import from here, never call fetch directly.
-const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8000/api/v1'
+const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? 'https://api-acc.stride-events.net'
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string, public body?: unknown) {
