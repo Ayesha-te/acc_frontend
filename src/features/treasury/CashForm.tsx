@@ -3,15 +3,17 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { Account, accounts, documents } from '../../api/endpoints'
 import { PartySelect } from '../../components/PartySelect'
-import { Button, Card, ErrorBox, Input, Label, Select } from '../../components/ui'
+import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
+import { useToast } from '../../lib/toast'
 
 type Open = { id: number; number: string; due_date: string; outstanding: string }
 
 /** Receipt (money in from a customer) or payment (money out to a supplier). */
 export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payments'; partyKind: 'customer' | 'supplier'; title: string }) {
   const nav = useNavigate()
+  const toast = useToast()
   const [cashAccounts, setCash] = useState<Account[]>([])
   const [f, setF] = useState({ party: '', cash_account: '', amount: '', date: todayDubai(), method: 'cash', reference: '', narration: '' })
   const [open, setOpen] = useState<Open[]>([])
@@ -46,11 +48,11 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
         ...f, party: Number(f.party), cash_account: Number(f.cash_account), idempotency_key,
         allocations: Object.entries(alloc).filter(([, v]) => Number(v) > 0).map(([id, amount]) => ({ invoice: Number(id), amount })),
       }),
-    () => nav(`/${path}`),
+    (doc: any) => { toast.success(`${doc.number} posted`); nav(`/${path}`) },
   )
   return (
     <form className="max-w-2xl space-y-4" onSubmit={(e) => { e.preventDefault(); submit() }}>
-      <h1 className="text-xl font-semibold">{title}</h1>
+      <PageHeader title={title} />
       <ErrorBox error={error} />
       <Card className="grid gap-3 sm:grid-cols-2">
         <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={f.party} onChange={(v) => up({ party: v })} /></Label>

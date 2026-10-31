@@ -1,57 +1,86 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { Column, Register } from './components/Register'
+import { Dashboard } from './features/dashboard/Dashboard'
 import { useAuth } from './features/auth/AuthContext'
 import { LoginPage } from './features/auth/LoginPage'
+import { LoadForm, LoadsPage, VehiclesPage } from './features/dispatch/DispatchPages'
+import { ItemsPage, ProductionForm, StockPage } from './features/inventory/InventoryPages'
+import { AgingPage, BalanceSheetPage, ProfitLossPage, SalesSummaryPage, TrialBalancePage, VatSummaryPage, VendorReportPage } from './features/reports/ReportPages'
 import { InvoiceForm } from './features/sales/DocumentForm'
-import { AccountsPage, OrganizationsPage, PartiesPage } from './features/setup/SetupPages'
+import { AccountsPage, BranchesPage, OrganizationsPage, PartiesPage, TaxRatesPage } from './features/setup/SetupPages'
 import { CashForm } from './features/treasury/CashForm'
 import { VoucherForm } from './features/vouchers/VoucherForm'
 import { money } from './lib/format'
 
-const amt = (key: string) => ({ key, label: key.replace('_', ' '), align: 'right' as const, render: (r: any) => money(r[key]) })
+const amt = (key: string, label: string): Column => ({ key, label, align: 'right', render: (r) => money(r[key]) })
 const invoiceCols: Column[] = [
-  { key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'party_name', label: 'Party' },
-  amt('subtotal'), amt('tax_total'), amt('total'), { key: 'status', label: 'Status' },
+  { key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'due_date', label: 'Due' }, { key: 'party_name', label: 'Party' },
+  amt('subtotal', 'Subtotal'), amt('tax_total', 'Tax'), amt('total', 'Total'), { key: 'status', label: 'Status' },
 ]
+const returnCols: Column[] = invoiceCols.filter((c) => c.key !== 'due_date')
 const cashCols: Column[] = [
   { key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'party_name', label: 'Party' },
-  { key: 'method', label: 'Method' }, { key: 'reference', label: 'Reference' }, amt('amount'), { key: 'status', label: 'Status' },
+  { key: 'method', label: 'Method' }, { key: 'reference', label: 'Reference' }, amt('amount', 'Amount'), amt('unapplied', 'Unapplied'), { key: 'status', label: 'Status' },
 ]
-const voucherCols: Column[] = [{ key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'narration', label: 'Narration' }, amt('total'), { key: 'status', label: 'Status' }]
+const voucherCols: Column[] = [{ key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'narration', label: 'Narration' }, amt('total', 'Amount'), { key: 'status', label: 'Status' }]
+const productionCols: Column[] = [
+  { key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'item_name', label: 'Product made' },
+  { key: 'quantity', label: 'Quantity', align: 'right', render: (r) => Number(r.quantity).toLocaleString(undefined, { maximumFractionDigits: 4 }) },
+  { key: 'location_name', label: 'Location' }, { key: 'status', label: 'Status' },
+]
 
 export default function App() {
   const { authed, ready, org } = useAuth()
   if (!authed) return <LoginPage />
   if (!ready) return <div className="p-8 text-slate-500">Loading…</div>
   const w = !!org && org.role !== 'viewer'
-  // `key={org.id}` remounts pages on organization switch so no data from one org lingers in another's view.
+  // Keyed by organization so no page keeps data from another organization after a switch.
+  const k = org?.id
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<Navigate to="/sales" replace />} />
         <Route path="organizations" element={<OrganizationsPage />} />
         {!org ? <Route path="*" element={<Navigate to="/organizations" replace />} /> : (
           <>
-            <Route path="sales" element={<Register key={org.id} title="Sales register" path="sales/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/sales/new" canWrite={w} />} />
+            <Route index element={<Dashboard key={k} />} />
+            <Route path="sales" element={<Register key={k} title="Sales invoices" subtitle="Bills you have sent to customers" path="sales/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/sales/new" createLabel="New invoice" canWrite={w} />} />
             <Route path="sales/new" element={<InvoiceForm path="sales/invoices" partyKind="customer" kind="invoice" backTo="/sales" title="New sales invoice" />} />
-            <Route path="sales/returns" element={<Register key={org.id} title="Sales returns" path="sales/invoices" columns={invoiceCols} extraQuery={{ kind: 'return' }} createTo="/sales/returns/new" canWrite={w} />} />
+            <Route path="sales/returns" element={<Register key={k} title="Sales returns" subtitle="Goods or amounts customers sent back" path="sales/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/sales/returns/new" createLabel="New return" canWrite={w} />} />
             <Route path="sales/returns/new" element={<InvoiceForm path="sales/invoices" partyKind="customer" kind="return" backTo="/sales/returns" title="New sales return" />} />
-            <Route path="purchases" element={<Register key={org.id} title="Purchase register" path="purchases/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/purchases/new" canWrite={w} />} />
+            <Route path="purchases" element={<Register key={k} title="Purchase invoices" subtitle="Bills received from suppliers" path="purchases/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/purchases/new" createLabel="New invoice" canWrite={w} />} />
             <Route path="purchases/new" element={<InvoiceForm path="purchases/invoices" partyKind="supplier" kind="invoice" backTo="/purchases" title="New purchase invoice" />} />
-            <Route path="purchases/returns" element={<Register key={org.id} title="Purchase returns" path="purchases/invoices" columns={invoiceCols} extraQuery={{ kind: 'return' }} createTo="/purchases/returns/new" canWrite={w} />} />
+            <Route path="purchases/returns" element={<Register key={k} title="Purchase returns" subtitle="Goods or amounts you sent back to suppliers" path="purchases/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/purchases/returns/new" createLabel="New return" canWrite={w} />} />
             <Route path="purchases/returns/new" element={<InvoiceForm path="purchases/invoices" partyKind="supplier" kind="return" backTo="/purchases/returns" title="New purchase return" />} />
-            <Route path="receipts" element={<Register key={org.id} title="Receipt register" path="receipts" columns={cashCols} createTo="/receipts/new" canWrite={w} />} />
-            <Route path="receipts/new" element={<CashForm path="receipts" partyKind="customer" title="New receipt" />} />
-            <Route path="payments" element={<Register key={org.id} title="Payment register" path="payments" columns={cashCols} createTo="/payments/new" canWrite={w} />} />
-            <Route path="payments/new" element={<CashForm path="payments" partyKind="supplier" title="New payment" />} />
-            {(['general', 'journal', 'contra'] as const).map((t) => [
-              <Route key={t} path={`vouchers/${t}`} element={<Register key={`${org.id}${t}`} title={`${t[0].toUpperCase()}${t.slice(1)} voucher register`} path="vouchers" columns={voucherCols} extraQuery={{ type: t }} createTo={`/vouchers/${t}/new`} canWrite={w} />} />,
+            <Route path="receipts" element={<Register key={k} title="Receipts" subtitle="Money received from customers" path="receipts" columns={cashCols} createTo="/receipts/new" createLabel="Receive money" canWrite={w} />} />
+            <Route path="receipts/new" element={<CashForm path="receipts" partyKind="customer" title="Receive money from a customer" />} />
+            <Route path="payments" element={<Register key={k} title="Payments" subtitle="Money paid to suppliers" path="payments" columns={cashCols} createTo="/payments/new" createLabel="Pay a supplier" canWrite={w} />} />
+            <Route path="payments/new" element={<CashForm path="payments" partyKind="supplier" title="Pay a supplier" />} />
+            {(['journal', 'general', 'contra'] as const).map((t) => [
+              <Route key={t} path={`vouchers/${t}`} element={<Register key={`${k}${t}`} title={`${t[0].toUpperCase()}${t.slice(1)} vouchers`}
+                subtitle={{ journal: 'Standard accounting adjustments and journal entries', general: 'General transactions with no dedicated screen', contra: 'Transfers between cash and bank accounts' }[t]}
+                path="vouchers" columns={voucherCols} extraQuery={{ type: t }} createTo={`/vouchers/${t}/new`} createLabel="New voucher" canWrite={w} />} />,
               <Route key={`${t}-new`} path={`vouchers/${t}/new`} element={<VoucherForm type={t} />} />,
             ])}
-            <Route path="parties" element={<PartiesPage />} />
-            <Route path="accounts" element={<AccountsPage />} />
-            <Route path="*" element={<Navigate to="/sales" replace />} />
+            <Route path="reports/profit-loss" element={<ProfitLossPage key={k} />} />
+            <Route path="reports/balance-sheet" element={<BalanceSheetPage key={k} />} />
+            <Route path="reports/trial-balance" element={<TrialBalancePage key={k} />} />
+            <Route path="reports/aging" element={<AgingPage key={k} />} />
+            <Route path="reports/vendor" element={<VendorReportPage key={k} />} />
+            <Route path="reports/sales-summary" element={<SalesSummaryPage key={k} />} />
+            <Route path="reports/vat-summary" element={<VatSummaryPage key={k} />} />
+            <Route path="inventory/items" element={<ItemsPage key={k} />} />
+            <Route path="inventory/stock" element={<StockPage key={k} />} />
+            <Route path="inventory/production" element={<Register key={k} title="Production" subtitle="Raw materials consumed to make finished goods" path="inventory/production" columns={productionCols} createTo="/inventory/production/new" createLabel="New production run" canWrite={w} />} />
+            <Route path="inventory/production/new" element={<ProductionForm key={k} />} />
+            <Route path="dispatch/vehicles" element={<VehiclesPage key={k} />} />
+            <Route path="dispatch/loads" element={<LoadsPage key={k} />} />
+            <Route path="dispatch/loads/new" element={<LoadForm key={k} />} />
+            <Route path="parties" element={<PartiesPage key={k} />} />
+            <Route path="accounts" element={<AccountsPage key={k} />} />
+            <Route path="settings/tax-rates" element={<TaxRatesPage key={k} />} />
+            <Route path="settings/branches" element={<BranchesPage key={k} />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </>
         )}
       </Route>

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { newKey } from './format'
 
 /** Guards against double-clicks and attaches an idempotency key so a retried submit can never post twice. */
-export function useSubmit(action: (idempotency_key: string) => Promise<unknown>, onDone: () => void) {
+export function useSubmit(action: (idempotency_key: string) => Promise<unknown>, onDone: (result: any) => void) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const key = useRef(newKey())
@@ -11,9 +11,9 @@ export function useSubmit(action: (idempotency_key: string) => Promise<unknown>,
     setBusy(true)
     setError(null)
     try {
-      await action(key.current)
+      const result = await action(key.current)
       key.current = newKey()
-      onDone()
+      onDone(result)
     } catch (e: any) {
       setError(e.message)
     } finally {

@@ -1,15 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Account, accounts, documents } from '../../api/endpoints'
-import { Button, Card, ErrorBox, Input, Label, Select } from '../../components/ui'
+import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
+import { useToast } from '../../lib/toast'
 
 type Line = { account: string; debit: string; credit: string; description: string }
 const blank = (): Line => ({ account: '', debit: '', credit: '', description: '' })
 
 export function VoucherForm({ type }: { type: 'general' | 'journal' | 'contra' }) {
   const nav = useNavigate()
+  const toast = useToast()
   const [accts, setAccts] = useState<Account[]>([])
   const [date, setDate] = useState(todayDubai())
   const [narration, setNarration] = useState('')
@@ -27,12 +29,12 @@ export function VoucherForm({ type }: { type: 'general' | 'journal' | 'contra' }
         type, date, narration, idempotency_key,
         lines: lines.filter((l) => l.account).map((l) => ({ account: Number(l.account), debit: l.debit || '0', credit: l.credit || '0', description: l.description })),
       }),
-    () => nav(`/vouchers/${type}`),
+    (doc: any) => { toast.success(`${doc.number} posted`); nav(`/vouchers/${type}`) },
   )
 
   return (
     <form className="max-w-4xl space-y-4" onSubmit={(e) => { e.preventDefault(); submit() }}>
-      <h1 className="text-xl font-semibold">New {type} voucher</h1>
+      <PageHeader title={`New ${type} voucher`} subtitle={{ journal: 'For standard adjustments and journal entries', general: 'For transactions that have no dedicated screen', contra: 'Move money between cash and bank accounts' }[type]} />
       <ErrorBox error={error} />
       <Card className="grid gap-3 sm:grid-cols-3">
         <Label text="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Label>

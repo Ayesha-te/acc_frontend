@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { documents } from '../../api/endpoints'
-import { Button, Card, ErrorBox, Input, Label, Select } from '../../components/ui'
+import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { PartySelect } from '../../components/PartySelect'
+import { TaxHint, TaxSelect, useTaxRates } from '../../components/TaxSelect'
+import { useToast } from '../../lib/toast'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
 
@@ -21,6 +23,8 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
   title: string
 }) {
   const nav = useNavigate()
+  const toast = useToast()
+  const rates = useTaxRates().data
   const [party, setParty] = useState('')
   const [date, setDate] = useState(todayDubai())
   const [original, setOriginal] = useState('')
@@ -49,12 +53,12 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
   const { submit, busy, error } = useSubmit(
     (idempotency_key) =>
       documents(path).create({ kind, party: Number(party), date, narration, items, idempotency_key, original: kind === 'return' ? Number(original) : undefined }),
-    () => nav(backTo),
+    (doc: any) => { toast.success(`${doc.number} posted`); nav(backTo) },
   )
 
   return (
     <form className="max-w-4xl space-y-4" onSubmit={(e) => { e.preventDefault(); submit() }}>
-      <h1 className="text-xl font-semibold">{title}</h1>
+      <PageHeader title={title} />
       <ErrorBox error={error} />
       <Card className="grid gap-3 sm:grid-cols-3">
         <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={party} onChange={setParty} /></Label>
@@ -73,18 +77,19 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
       </Card>
       <Card className="space-y-2">
         <div className="hidden grid-cols-12 gap-2 text-xs font-medium text-slate-500 sm:grid">
-          <span className="col-span-5">Description</span><span className="col-span-2">Qty</span><span className="col-span-2">Unit price</span><span className="col-span-2">Tax %</span>
+          <span className="col-span-4">Description</span><span className="col-span-2">Qty</span><span className="col-span-2">Unit price</span><span className="col-span-3">Tax</span>
         </div>
         {items.map((it, i) => (
           <div key={i} className="grid grid-cols-12 gap-2">
-            <Input className="col-span-12 sm:col-span-5" placeholder="Description" value={it.description} onChange={(e) => set(i, { description: e.target.value })} required />
+            <Input className="col-span-12 sm:col-span-4" placeholder="Description" value={it.description} onChange={(e) => set(i, { description: e.target.value })} required />
             <Input className="col-span-4 sm:col-span-2" type="number" step="any" min="0" value={it.quantity} onChange={(e) => set(i, { quantity: e.target.value })} required aria-label="Quantity" />
             <Input className="col-span-4 sm:col-span-2" type="number" step="any" min="0" value={it.unit_price} onChange={(e) => set(i, { unit_price: e.target.value })} required aria-label="Unit price" />
-            <Input className="col-span-3 sm:col-span-2" type="number" step="any" min="0" max="100" value={it.tax_rate} onChange={(e) => set(i, { tax_rate: e.target.value })} aria-label="Tax rate" />
+            <div className="col-span-8 sm:col-span-3"><TaxSelect rates={rates} value={it.tax_rate} onChange={(v) => set(i, { tax_rate: v })} /></div>
             <Button type="button" variant="ghost" className="col-span-1" disabled={items.length === 1} onClick={() => setItems(items.filter((_, j) => j !== i))} aria-label="Remove line">×</Button>
           </div>
         ))}
         <Button type="button" variant="ghost" onClick={() => setItems([...items, blank()])}>+ Add line</Button>
+        <TaxHint rates={rates} />
         <div className="ml-auto w-56 space-y-1 text-sm">
           <div className="flex justify-between"><span>Subtotal</span><span>{money(net)}</span></div>
           <div className="flex justify-between"><span>Tax</span><span>{money(tax)}</span></div>

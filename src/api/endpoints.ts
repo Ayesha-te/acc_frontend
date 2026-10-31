@@ -25,3 +25,17 @@ export const documents = (path: string) => ({
   create: (body: unknown) => api<any>(`/${path}/`, { method: 'POST', body }),
   void: (id: number) => api<any>(`/${path}/${id}/void/`, { method: 'POST' }),
 })
+
+/** Generic list/create/update for simple setup resources (items, vehicles, tax rates, branches...). */
+export const resource = <T = any>(path: string) => ({
+  list: (query?: Record<string, string | number | undefined>) => api<any>(`/${path}/`, { query: { page_size: 200, ...query } }).then((r) => (Array.isArray(r) ? r : r.results) as T[]),
+  page: (query?: Record<string, string | number | undefined>) => api<Page<T>>(`/${path}/`, { query }),
+  create: (body: unknown) => api<T>(`/${path}/`, { method: 'POST', body }),
+  update: (id: number, body: unknown) => api<T>(`/${path}/${id}/`, { method: 'PATCH', body }),
+  act: (id: number, action: string, body?: unknown) => api<any>(`/${path}/${id}/${action}/`, { method: 'POST', body }),
+})
+
+export const report = (name: string, query: Record<string, string | number | undefined>) => api<any>(`/reports/${name}/`, { query })
+export type TaxRate = { id: number; name: string; rate: string; is_default: boolean; is_active: boolean }
+export type Item = { id: number; sku: string; name: string; kind: 'raw_material' | 'finished_good'; unit: string; is_active: boolean }
+export type Location = { id: number; name: string; kind: string; is_active: boolean }
