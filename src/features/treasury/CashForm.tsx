@@ -2,21 +2,24 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../api/client'
 import { Account, accounts, documents } from '../../api/endpoints'
+import { BranchSelect } from '../../components/BranchSelect'
 import { PartySelect } from '../../components/PartySelect'
 import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
 import { useToast } from '../../lib/toast'
 
-type Open = { id: number; number: string; due_date: string; outstanding: string }
+type Open = { id: number; number: string; due_date: string; outstanding: string; branch: number | null }
 
 /** Receipt (money in from a customer) or payment (money out to a supplier). */
 export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payments'; partyKind: 'customer' | 'supplier'; title: string }) {
   const nav = useNavigate()
   const toast = useToast()
   const [cashAccounts, setCash] = useState<Account[]>([])
-  const [f, setF] = useState({ party: '', cash_account: '', amount: '', date: todayDubai(), method: 'cash', reference: '', narration: '' })
-  const [open, setOpen] = useState<Open[]>([])
+  const [f, setF] = useState({ party: '', cash_account: '', amount: '', date: todayDubai(), method: 'cash', reference: '', narration: '', branch: '' })
+  const [openAll, setOpen] = useState<Open[]>([])
+  // A receipt/payment can only be applied to invoices of its own branch (the server enforces it too).
+  const open = openAll.filter((o) => (o.branch ?? null) === (f.branch ? Number(f.branch) : null))
   const [alloc, setAlloc] = useState<Record<number, string>>({})
   const up = (patch: Partial<typeof f>) => setF({ ...f, ...patch })
   useEffect(() => {
@@ -31,6 +34,7 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
     if (!f.party) return setOpen([])
     api<Open[]>(`/${path}/open-invoices/`, { query: { party: f.party } }).then(setOpen).catch(() => setOpen([]))
   }, [f.party, path])
+  useEffect(() => { setAlloc({}) }, [f.branch])
   const applied = Object.values(alloc).reduce((s, v) => s + Number(v || 0), 0)
   const unapplied = Number(f.amount || 0) - applied
   // Oldest-due first, never more than the invoice's outstanding or the remaining amount.
@@ -45,7 +49,7 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
   }
   const { submit, busy, error } = useSubmit(
     (idempotency_key) => documents(path).create({
-        ...f, party: Number(f.party), cash_account: Number(f.cash_account), idempotency_key,
+        ...f, party: Number(f.party), cash_account: Number(f.cash_account), branch: f.branch ? Number(f.branch) : null, idempotency_key,
         allocations: Object.entries(alloc).filter(([, v]) => Number(v) > 0).map(([id, amount]) => ({ invoice: Number(id), amount })),
       }),
     (doc: any) => { toast.success(`${doc.number} posted`); nav(`/${path}`) },
@@ -57,6 +61,7 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
       <Card className="grid gap-3 sm:grid-cols-2">
         <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={f.party} onChange={(v) => up({ party: v })} /></Label>
         <Label text="Date"><Input type="date" value={f.date} onChange={(e) => up({ date: e.target.value })} required /></Label>
+        <BranchSelect value={f.branch} onChange={(v) => up({ branch: v })} />
         <Label text="Amount"><Input type="number" step="0.01" min="0.01" value={f.amount} onChange={(e) => up({ amount: e.target.value })} required /></Label>
         <Label text={path === 'receipts' ? 'Deposit to' : 'Paid from'}>
           <Select value={f.cash_account} onChange={(e) => up({ cash_account: e.target.value })} required>

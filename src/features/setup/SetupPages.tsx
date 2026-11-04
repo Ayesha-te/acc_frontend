@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react'
+import { api } from '../../api/client'
 import { Account, TaxRate, accounts, orgs, parties, resource } from '../../api/endpoints'
 import { Badge, Button, Card, EmptyState, ErrorBox, Input, Label, Modal, PageHeader, Select, Spinner } from '../../components/ui'
 import { useDebounced } from '../../lib/useDebounced'
@@ -219,6 +220,133 @@ export function BranchesPage() {
         ))}</ul>
         {data && !data.length && <EmptyState title="No branches" text="You can work without branches. Add one only if you need to separate activity by location." />}
       </Card>
+      {canWrite && data && data.length > 0 && <BranchAccessCard branches={data.filter((b: any) => b.is_active)} />}
     </div>
+  )
+}
+
+type Member = { id: number; username: string; role: string }
+type Access = { id: number; membership: number; branch: number }
+
+/** Owners/admins reach every branch. Accountants and viewers reach only the branches ticked here (none ticked = none). */
+function BranchAccessCard({ branches }: { branches: { id: number; name: string }[] }) {
+  const { org } = useAuth()
+  const toast = useToast()
+  const members = useFetch(() => resource<Member>('members').list(), [org?.id])
+  const access = useFetch(() => resource<Access>('branch-access').list(), [org?.id])
+  const [busy, setBusy] = useState<string | null>(null)
+  const restricted = (members.data ?? []).filter((m) => m.role !== 'owner' && m.role !== 'admin')
+  const find = (m: number, b: number) => (access.data ?? []).find((a) => a.membership === m && a.branch === b)
+  const toggle = async (m: Member, b: { id: number; name: string }) => {
+    const key = `${m.id}:${b.id}`
+    setBusy(key)
+    try {
+      const row = find(m.id, b.id)
+      if (row) await api(`/branch-access/${row.id}/`, { method: 'DELETE' })
+      else await resource('branch-access').create({ membership: m.id, branch: b.id })
+      access.reload()
+    } catch (e: any) { toast.error(e.message) } finally { setBusy(null) }
+  }
+  return (
+    <Card className="mt-4">
+      <h2 className="font-medium">Branch access</h2>
+      <p className="mb-3 text-sm text-slate-600">Owners and admins can use every branch. Everyone else can only see and post to the branches ticked below; a member with none ticked cannot work in any branch.</p>
+      <ErrorBox error={members.error || access.error} />
+      {!restricted.length && members.data && <p className="text-sm text-slate-500">No accountants or viewers in this organization yet.</p>}
+      <ul>{restricted.map((m) => (
+        <li key={m.id} className="border-t border-slate-100 py-2 first:border-t-0">
+          <div className="mb-1 text-sm"><span className="font-medium">{m.username}</span> <span className="text-slate-500">({m.role})</span>
+            {access.data && !branches.some((b) => find(m.id, b.id)) && <span className="ml-2 text-xs text-amber-700">no branches assigned</span>}</div>
+          <div className="flex flex-wrap gap-4">{branches.map((b) => (
+            <label key={b.id} className="flex items-center gap-1.5 text-sm">
+              <input type="checkbox" checked={!!find(m.id, b.id)} disabled={busy === `${m.id}:${b.id}` || !access.data} onChange={() => toggle(m, b)} /> {b.name}
+            </label>
+          ))}</div>
+        </li>
+      ))}</ul>
+    </Card>
+  )
+}
+
+export function PeriodLockPage() {
+  const { org, refreshOrgs } = useAuth()
+  const canWrite = org?.role === 'owner' || org?.role === 'admin'
+  const toast = useToast()
+  const current = org?.books_locked_through ?? null
+  const [date, setDate] = useState(current ?? '')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const save = async (value: string | null) => {
+    if (!org) return
+    setBusy(true)
+    try {
+      await orgs.setLock(org.id, value)
+      await refreshOrgs()
+      setDate(value ?? '')
+      setError(null)
+      toast.success(value ? `Books locked through ${value}` : 'All periods are open')
+    } catch (err: any) { setError(err.message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="max-w-2xl">
+      <PageHeader title="Period lock" subtitle="Close the books through a date. Nothing dated on or before it can be posted or voided." />
+      <ErrorBox error={error} />
+      <Card className="mb-4">
+        <p className="mb-3 text-sm text-slate-600">
+          {current ? <>Books are locked through <span className="font-semibold">{current}</span> (inclusive). Reports and history stay fully visible.</> : 'No period is locked.'}
+        </p>
+        {canWrite ? (
+          <form className="flex flex-wrap items-end gap-3" onSubmit={(e: FormEvent) => { e.preventDefault(); save(date || null) }}>
+            <div className="w-56"><Label text="Lock through" hint="Cannot be in the future"><Input type="date" value={date} max={new Date().toISOString().slice(0, 10)} onChange={(e) => setDate(e.target.value)} /></Label></div>
+            <Button disabled={busy || !date || date === current}>Save lock</Button>
+            {current && <Button type="button" variant="subtle" disabled={busy} onClick={() => save(null)}>Reopen all periods</Button>}
+          </form>
+        ) : <p className="text-sm text-slate-500">Only owners and admins can change the lock.</p>}
+      </Card>
+      <FiscalYearCard canWrite={canWrite} />
+      <p className="text-xs text-slate-500">The lock is enforced by the server for every sales, purchase, receipt, payment and voucher document, including voiding. Changing it back is possible for owners and admins.</p>
+    </div>
+  )
+}
+
+function FiscalYearCard({ canWrite }: { canWrite: boolean }) {
+  const { org, refreshOrgs } = useAuth()
+  const toast = useToast()
+  const [tick, setTick] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const { data, loading } = useFetch(() => (org ? orgs.fiscalYears(org.id) : Promise.resolve(null)), [org?.id, tick])
+  const close = async () => {
+    if (!org || !data?.next_year_end) return
+    if (!confirm(`Close the fiscal year ending ${data.next_year_end}? The books will be locked through that date. An owner or admin can reopen them later from this page.`)) return
+    setBusy(true)
+    try {
+      const r = await orgs.closeYear(org.id, data.next_year_end)
+      await refreshOrgs()
+      setTick((t) => t + 1)
+      setError(null)
+      toast.success(`Fiscal year to ${r.year_end} closed. Profit carried forward: ${r.net_profit}`)
+    } catch (err: any) { setError(err.message) } finally { setBusy(false) }
+  }
+  return (
+    <Card className="mb-4">
+      <h2 className="mb-2 text-sm font-semibold">Fiscal year close</h2>
+      <ErrorBox error={error} />
+      {loading ? <Spinner /> : (
+        <>
+          <p className="mb-3 text-sm text-slate-600">
+            {data?.next_year_end ? <>The fiscal year ending <span className="font-semibold">{data.next_year_end}</span> is complete and can be closed.</> : 'No completed fiscal year is waiting to be closed.'}
+            {' '}Closing locks the books through year end. Profit and loss for the year stays readable, and the balance sheet carries the profit forward as retained earnings.
+          </p>
+          {canWrite && <Button disabled={busy || !data?.next_year_end} onClick={close}>{busy ? 'Closing…' : 'Close fiscal year'}</Button>}
+          {!!data?.closes.length && (
+            <table className="mt-4 w-full text-sm">
+              <thead><tr className="text-left text-slate-500"><th>Year</th><th className="text-right">Profit</th><th>Closed by</th></tr></thead>
+              <tbody>{data.closes.map((c) => <tr key={c.id}><td>{c.year_start} → {c.year_end}</td><td className="text-right">{c.net_profit}</td><td>{c.closed_by_name ?? ''}</td></tr>)}</tbody>
+            </table>
+          )}
+        </>
+      )}
+    </Card>
   )
 }

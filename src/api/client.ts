@@ -22,6 +22,33 @@ function describe(body: any): string {
   return Object.entries(body).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : JSON.stringify(v)}`).join('; ')
 }
 
+/** Multipart upload (browser sets the boundary, so no JSON content type). */
+export async function apiUpload<T = unknown>(path: string, file: File, fields: Record<string, string> = {}): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (session.token) headers.Authorization = `Token ${session.token}`
+  if (session.orgId) headers['X-Organization-ID'] = session.orgId
+  const form = new FormData()
+  Object.entries(fields).forEach(([k, v]) => form.append(k, v))
+  form.append('file', file)
+  const res = await fetch(`${BASE}${path}`, { method: 'POST', headers, body: form })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, describe(data), data?.code, data)
+  return data as T
+}
+
+/** Authenticated file download (the token cannot ride on a plain link). */
+export async function apiDownload(path: string, filename: string): Promise<void> {
+  const headers: Record<string, string> = {}
+  if (session.token) headers.Authorization = `Token ${session.token}`
+  if (session.orgId) headers['X-Organization-ID'] = session.orgId
+  const res = await fetch(`${BASE}${path}`, { headers })
+  if (!res.ok) throw new ApiError(res.status, 'Could not download the receipt')
+  const url = URL.createObjectURL(await res.blob())
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename })
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {}): Promise<T> {
   const qs = opts.query ? '?' + new URLSearchParams(Object.entries(opts.query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])) : ''
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }

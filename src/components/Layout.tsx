@@ -6,18 +6,19 @@ import { Button, Select } from './ui'
 const nav: [string, [string, string][]][] = [
   ['', [['/', 'Dashboard']]],
   ['Sales', [['/sales', 'Sales invoices'], ['/sales/returns', 'Sales returns'], ['/receipts', 'Receipts (money in)']]],
-  ['Purchases', [['/purchases', 'Purchase invoices'], ['/purchases/returns', 'Purchase returns'], ['/payments', 'Payments (money out)']]],
-  ['Vouchers', [['/vouchers/journal', 'Journal vouchers'], ['/vouchers/general', 'General vouchers'], ['/vouchers/contra', 'Contra (cash ⇄ bank)']]],
+  ['Purchases', [['/purchases', 'Purchase invoices'], ['/purchases/returns', 'Purchase returns'], ['/payments', 'Payments (money out)'], ['/expenses', 'Expenses']]],
+  ['Vouchers', [['/vouchers/journal', 'Journal vouchers'], ['/vouchers/general', 'General vouchers'], ['/vouchers/contra', 'Contra (cash ⇄ bank)'], ['/vouchers/opening', 'Opening balances']]],
+  ['Banking', [['/banking', 'Bank statements']]],
   ['Reports', [['/reports/profit-loss', 'Profit & Loss'], ['/reports/balance-sheet', 'Balance Sheet'], ['/reports/trial-balance', 'Trial Balance'],
     ['/reports/aging', 'Aging'], ['/reports/vendor', 'Vendor report'], ['/reports/sales-summary', 'Sales summary'], ['/reports/vat-summary', 'VAT summary']]],
   ['Stock & production', [['/inventory/items', 'Items'], ['/inventory/stock', 'Stock on hand'], ['/inventory/production', 'Production']]],
   ['Van loading', [['/dispatch/loads', 'Van loads'], ['/dispatch/vehicles', 'Vehicles']]],
-  ['Setup', [['/parties', 'Customers & suppliers'], ['/accounts', 'Chart of accounts'], ['/settings/tax-rates', 'Tax rates'], ['/settings/branches', 'Branches']]],
+  ['Setup', [['/parties', 'Customers & suppliers'], ['/accounts', 'Chart of accounts'], ['/settings/tax-rates', 'Tax rates'], ['/settings/branches', 'Branches'], ['/settings/period-lock', 'Period lock']]],
 ]
 
 const quick: [string, string][] = [
   ['/sales/new', 'Sales invoice'], ['/purchases/new', 'Purchase invoice'], ['/receipts/new', 'Receive money'],
-  ['/payments/new', 'Pay a supplier'], ['/vouchers/journal/new', 'Journal entry'], ['/inventory/production/new', 'Production run'], ['/dispatch/loads/new', 'Load a van'],
+  ['/payments/new', 'Pay a supplier'], ['/expenses/new', 'Expense'], ['/vouchers/journal/new', 'Journal entry'], ['/inventory/production/new', 'Production run'], ['/dispatch/loads/new', 'Load a van'],
 ]
 
 function QuickCreate() {
@@ -80,7 +81,7 @@ export function Layout() {
           </p>
         )}
         <nav className="mt-4 space-y-4">
-          {nav.map(([group, items]) => (
+          {nav.filter(([group]) => group !== 'Banking' || org?.role === 'owner' || org?.role === 'admin').map(([group, items]) => (
             <div key={group || 'top'}>
               {group && <div className="mb-1 px-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500">{group}</div>}
               {items.map(([to, label]) =>

@@ -52,14 +52,14 @@ export function BalanceSheetPage() {
       onCsv={data && (() => downloadCsv('balance-sheet.csv', ['Section', 'Code', 'Account', 'Amount'], [
         ...data.assets.map((x: any) => ['Assets', x.code, x.name, x.amount]), ['Assets', '', 'Total assets', data.total_assets],
         ...data.liabilities.map((x: any) => ['Liabilities', x.code, x.name, x.amount]), ['Liabilities', '', 'Total liabilities', data.total_liabilities],
-        ...data.equity.map((x: any) => ['Equity', x.code, x.name, x.amount]), ['Equity', '', 'Current period earnings', data.current_period_earnings],
+        ...data.equity.map((x: any) => ['Equity', x.code, x.name, x.amount]), ['Equity', '', 'Retained earnings (prior fiscal years)', data.retained_earnings_prior_years], ['Equity', '', 'Current year earnings', data.current_year_earnings],
         ['Equity', '', 'Total liabilities and equity', data.total_liabilities_and_equity]]))}>
       {data && (
         <div className="grid gap-4 lg:grid-cols-2">
           <Section title="Assets" rows={data.assets} total={data.total_assets} totalLabel="Total assets" />
           <div className="space-y-4">
             <Section title="Liabilities" rows={data.liabilities} total={data.total_liabilities} totalLabel="Total liabilities" />
-            <Section title="Equity" rows={[...data.equity, { name: 'Current period earnings', amount: data.current_period_earnings }]}
+            <Section title="Equity" rows={[...data.equity, { name: 'Retained earnings (prior fiscal years)', amount: data.retained_earnings_prior_years }, { name: 'Current year earnings', amount: data.current_year_earnings }]}
               total={String(Number(data.total_equity) + Number(data.current_period_earnings))} totalLabel="Total equity" />
             <Card className="flex items-center justify-between text-sm">
               <span>Liabilities + equity = {money(data.total_liabilities_and_equity)}</span>

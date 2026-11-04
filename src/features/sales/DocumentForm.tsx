@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { documents } from '../../api/endpoints'
 import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
+import { BranchSelect } from '../../components/BranchSelect'
 import { PartySelect } from '../../components/PartySelect'
 import { TaxHint, TaxSelect, useTaxRates } from '../../components/TaxSelect'
 import { useToast } from '../../lib/toast'
@@ -28,9 +29,10 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
   const [party, setParty] = useState('')
   const [date, setDate] = useState(todayDubai())
   const [original, setOriginal] = useState('')
+  const [branch, setBranch] = useState('')
   const [narration, setNarration] = useState('')
   const [items, setItems] = useState<Item[]>([blank()])
-  const [invoices, setInvoices] = useState<{ id: number; number: string; date: string; total: string }[]>([])
+  const [invoices, setInvoices] = useState<{ id: number; number: string; date: string; total: string; branch: number | null }[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(false)
 
   // Returns pick the original from the selected party's posted invoices (the server still validates the limit).
@@ -52,7 +54,7 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
 
   const { submit, busy, error } = useSubmit(
     (idempotency_key) =>
-      documents(path).create({ kind, party: Number(party), date, narration, items, idempotency_key, original: kind === 'return' ? Number(original) : undefined }),
+      documents(path).create({ kind, party: Number(party), date, narration, items, idempotency_key, branch: branch ? Number(branch) : null, original: kind === 'return' ? Number(original) : undefined }),
     (doc: any) => { toast.success(`${doc.number} posted`); nav(backTo) },
   )
 
@@ -63,9 +65,10 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
       <Card className="grid gap-3 sm:grid-cols-3">
         <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={party} onChange={setParty} /></Label>
         <Label text="Date"><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></Label>
+        <BranchSelect value={branch} onChange={setBranch} />
         {kind === 'return' && (
           <Label text="Original invoice">
-            <Select value={original} onChange={(e) => setOriginal(e.target.value)} required disabled={!party || loadingInvoices}>
+            <Select value={original} onChange={(e) => { setOriginal(e.target.value); const inv = invoices.find((i) => String(i.id) === e.target.value); if (inv) setBranch(inv.branch ? String(inv.branch) : '') }} required disabled={!party || loadingInvoices}>
               <option value="">
                 {!party ? `Select a ${partyKind} first` : loadingInvoices ? 'Loading…' : invoices.length ? 'Select invoice…' : `No posted invoices for this ${partyKind}`}
               </option>

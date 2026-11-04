@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { expenses } from './api/endpoints'
 import { Layout } from './components/Layout'
 import { Column, Register } from './components/Register'
 import { Dashboard } from './features/dashboard/Dashboard'
@@ -8,9 +9,11 @@ import { LoadForm, LoadsPage, VehiclesPage } from './features/dispatch/DispatchP
 import { ItemsPage, ProductionForm, StockPage } from './features/inventory/InventoryPages'
 import { AgingPage, BalanceSheetPage, ProfitLossPage, SalesSummaryPage, TrialBalancePage, VatSummaryPage, VendorReportPage } from './features/reports/ReportPages'
 import { InvoiceForm } from './features/sales/DocumentForm'
-import { AccountsPage, BranchesPage, OrganizationsPage, PartiesPage, TaxRatesPage } from './features/setup/SetupPages'
+import { AccountsPage, BranchesPage, OrganizationsPage, PartiesPage, PeriodLockPage, TaxRatesPage } from './features/setup/SetupPages'
 import { CashForm } from './features/treasury/CashForm'
 import { VoucherForm } from './features/vouchers/VoucherForm'
+import { ExpenseForm } from './features/expenses/ExpenseForm'
+import { BankStatementPage, BankStatementsPage } from './features/banking/BankingPages'
 import { money } from './lib/format'
 
 const amt = (key: string, label: string): Column => ({ key, label, align: 'right', render: (r) => money(r[key]) })
@@ -22,6 +25,12 @@ const returnCols: Column[] = invoiceCols.filter((c) => c.key !== 'due_date')
 const cashCols: Column[] = [
   { key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'party_name', label: 'Party' },
   { key: 'method', label: 'Method' }, { key: 'reference', label: 'Reference' }, amt('amount', 'Amount'), amt('unapplied', 'Unapplied'), { key: 'status', label: 'Status' },
+]
+const expenseCols: Column[] = [
+  { key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'expense_account_name', label: 'Category' },
+  { key: 'vendor_name', label: 'Supplier', render: (r) => r.vendor_name ?? '' }, { key: 'reference', label: 'Reference' },
+  amt('tax_total', 'Tax'), amt('total', 'Total'), { key: 'status', label: 'Status' },
+  { key: 'has_receipt', label: 'Receipt', render: (r) => r.has_receipt ? <button type="button" className="text-indigo-600 underline" onClick={() => expenses.downloadReceipt(r.id, r.number).catch((e) => alert(e.message))}>Download</button> : '' },
 ]
 const voucherCols: Column[] = [{ key: 'number', label: 'Number' }, { key: 'date', label: 'Date' }, { key: 'narration', label: 'Narration' }, amt('total', 'Amount'), { key: 'status', label: 'Status' }]
 const productionCols: Column[] = [
@@ -56,9 +65,13 @@ export default function App() {
             <Route path="receipts/new" element={<CashForm path="receipts" partyKind="customer" title="Receive money from a customer" />} />
             <Route path="payments" element={<Register key={k} title="Payments" subtitle="Money paid to suppliers" path="payments" columns={cashCols} createTo="/payments/new" createLabel="Pay a supplier" canWrite={w} />} />
             <Route path="payments/new" element={<CashForm path="payments" partyKind="supplier" title="Pay a supplier" />} />
-            {(['journal', 'general', 'contra'] as const).map((t) => [
+            <Route path="banking" element={<BankStatementsPage key={k} />} />
+            <Route path="banking/:id" element={<BankStatementPage key={k} />} />
+            <Route path="expenses" element={<Register key={k} title="Expenses" subtitle="Money spent without a supplier bill" path="expenses" columns={expenseCols} createTo="/expenses/new" createLabel="New expense" canWrite={w} />} />
+            <Route path="expenses/new" element={<ExpenseForm key={k} />} />
+            {(['journal', 'general', 'contra', 'opening'] as const).map((t) => [
               <Route key={t} path={`vouchers/${t}`} element={<Register key={`${k}${t}`} title={`${t[0].toUpperCase()}${t.slice(1)} vouchers`}
-                subtitle={{ journal: 'Standard accounting adjustments and journal entries', general: 'General transactions with no dedicated screen', contra: 'Transfers between cash and bank accounts' }[t]}
+                subtitle={{ journal: 'Standard accounting adjustments and journal entries', general: 'General transactions with no dedicated screen', contra: 'Transfers between cash and bank accounts', opening: 'Balances brought forward when you started using the system' }[t]}
                 path="vouchers" columns={voucherCols} extraQuery={{ type: t }} createTo={`/vouchers/${t}/new`} createLabel="New voucher" canWrite={w} />} />,
               <Route key={`${t}-new`} path={`vouchers/${t}/new`} element={<VoucherForm type={t} />} />,
             ])}
@@ -80,6 +93,7 @@ export default function App() {
             <Route path="accounts" element={<AccountsPage key={k} />} />
             <Route path="settings/tax-rates" element={<TaxRatesPage key={k} />} />
             <Route path="settings/branches" element={<BranchesPage key={k} />} />
+            <Route path="settings/period-lock" element={<PeriodLockPage key={k} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>
         )}
