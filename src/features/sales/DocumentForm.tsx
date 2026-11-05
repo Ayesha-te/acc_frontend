@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { documents } from '../../api/endpoints'
+import { api } from '../../api/client'
+import { documents, resource } from '../../api/endpoints'
 import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { BranchSelect } from '../../components/BranchSelect'
 import { PartySelect } from '../../components/PartySelect'
@@ -9,7 +10,7 @@ import { useToast } from '../../lib/toast'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
 
-type Item = { description: string; quantity: string; unit_price: string; tax_rate: string }
+type Item = { description: string; quantity: string; unit_price: string; tax_rate: string; item?: string }
 const blank = (): Item => ({ description: '', quantity: '1', unit_price: '', tax_rate: '0' })
 
 /**
@@ -32,6 +33,19 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
   const [branch, setBranch] = useState('')
   const [narration, setNarration] = useState('')
   const [items, setItems] = useState<Item[]>([blank()])
+  // Stock items can be linked to lines only once inventory costing is on (the server enforces this too).
+  const [stockItems, setStockItems] = useState<{ id: number; name: string; sku: string }[]>([])
+  useEffect(() => {
+    api<{ enabled: boolean }>('/inventory/costing/').then(async (s) => { if (s.enabled) setStockItems(await resource<any>('inventory/items').list({ is_active: 'true' })) }).catch(() => setStockItems([]))
+  }, [])
+  // Sales invoices can pick up posted billable expenses of the chosen customer (charged once, at cost).
+  const [billableList, setBillableList] = useState<{ id: number; number: string; total: string; narration: string }[]>([])
+  const [billed, setBilled] = useState<number[]>([])
+  useEffect(() => {
+    setBilled([]); setBillableList([])
+    if (path !== 'sales/invoices' || kind !== 'invoice' || !party) return
+    documents('expenses').list({ customer: party, is_billable: 'true', status: 'posted', page_size: 200 }).then((r) => setBillableList(r.results.filter((e: any) => !e.billed_invoice))).catch(() => {})
+  }, [party, path, kind])
   const [invoices, setInvoices] = useState<{ id: number; number: string; date: string; total: string; branch: number | null }[]>([])
   const [loadingInvoices, setLoadingInvoices] = useState(false)
 
@@ -54,7 +68,7 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
 
   const { submit, busy, error } = useSubmit(
     (idempotency_key) =>
-      documents(path).create({ kind, party: Number(party), date, narration, items, idempotency_key, branch: branch ? Number(branch) : null, original: kind === 'return' ? Number(original) : undefined }),
+      documents(path).create({ kind, party: Number(party), date, narration, items: items.map(({ item, ...rest }) => ({ ...rest, item: item ? Number(item) : null })), idempotency_key, branch: branch ? Number(branch) : null, original: kind === 'return' ? Number(original) : undefined, billable_expenses: billed.length ? billed : undefined }),
     (doc: any) => { toast.success(`${doc.number} posted`); nav(backTo) },
   )
 
@@ -84,7 +98,13 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
         </div>
         {items.map((it, i) => (
           <div key={i} className="grid grid-cols-12 gap-2">
-            <Input className="col-span-12 sm:col-span-4" placeholder="Description" value={it.description} onChange={(e) => set(i, { description: e.target.value })} required />
+            <div className="col-span-12 sm:col-span-4 space-y-1">
+              <Input placeholder="Description" value={it.description} onChange={(e) => set(i, { description: e.target.value })} required />
+              {stockItems.length > 0 && (
+                <Select value={it.item ?? ''} onChange={(e) => { const s = stockItems.find((x) => String(x.id) === e.target.value); set(i, { item: e.target.value, ...(s && !it.description ? { description: s.name } : {}) }) }} aria-label="Stock item">
+                  <option value="">Not a stock item</option>{stockItems.map((s) => <option key={s.id} value={s.id}>{s.name} ({s.sku})</option>)}
+                </Select>)}
+            </div>
             <Input className="col-span-4 sm:col-span-2" type="number" step="any" min="0" value={it.quantity} onChange={(e) => set(i, { quantity: e.target.value })} required aria-label="Quantity" />
             <Input className="col-span-4 sm:col-span-2" type="number" step="any" min="0" value={it.unit_price} onChange={(e) => set(i, { unit_price: e.target.value })} required aria-label="Unit price" />
             <div className="col-span-8 sm:col-span-3"><TaxSelect rates={rates} value={it.tax_rate} onChange={(v) => set(i, { tax_rate: v })} /></div>
@@ -92,6 +112,15 @@ export function InvoiceForm({ path, partyKind, kind, backTo, title }: {
           </div>
         ))}
         <Button type="button" variant="ghost" onClick={() => setItems([...items, blank()])}>+ Add line</Button>
+        {billableList.length > 0 && (
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-sm">
+            <p className="mb-1 font-medium">Billable expenses for this customer (added at cost, once)</p>
+            {billableList.map((e) => (
+              <label key={e.id} className="flex items-center gap-2">
+                <input type="checkbox" checked={billed.includes(e.id)} onChange={(ev) => setBilled(ev.target.checked ? [...billed, e.id] : billed.filter((x) => x !== e.id))} />
+                {e.number} {e.narration} · {money(e.total)}
+              </label>))}
+          </div>)}
         <TaxHint rates={rates} />
         <div className="ml-auto w-56 space-y-1 text-sm">
           <div className="flex justify-between"><span>Subtotal</span><span>{money(net)}</span></div>

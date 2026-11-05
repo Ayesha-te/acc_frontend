@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Account, accounts, BankCandidate, BankLine, banking } from '../../api/endpoints'
+import { Account, accounts, BankCandidate, BankLine, banking, bankRules, BankRuleRow, BankSuggestion } from '../../api/endpoints'
 import { Badge, Button, Card, EmptyState, ErrorBox, Input, Label, Modal, PageHeader, Select, Spinner, StatCard } from '../../components/ui'
 import { money } from '../../lib/format'
 import { useFetch } from '../../lib/useFetch'
@@ -43,7 +43,7 @@ export function BankStatementsPage() {
 
   return (
     <div className="max-w-5xl space-y-4">
-      <PageHeader title="Bank statements" subtitle="Import a CSV from your bank, match its lines to what is already in your books, then reconcile. Nothing is posted by importing or matching." />
+      <PageHeader title="Bank statements" subtitle="Import a CSV, OFX or QIF file from your bank, match its lines to what is already in your books, then reconcile. Nothing is posted by importing or matching." />
       <Card>
         <h2 className="mb-3 text-sm font-semibold">Import a statement</h2>
         <ErrorBox error={error} />
@@ -62,8 +62,8 @@ export function BankStatementsPage() {
               <option value="iso">2026-03-31 (year-month-day)</option><option value="dmy">31/03/2026 (day/month/year)</option><option value="mdy">03/31/2026 (month/day/year)</option>
             </Select>
           </Label>
-          <div className="sm:col-span-2"><Label text="CSV file" hint="Columns: Date, Description, Reference, and Amount (or Debit and Credit). Up to 2 MB.">
-            <Input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
+          <div className="sm:col-span-2"><Label text="Statement file (CSV, OFX/QFX or QIF)" hint="CSV columns: Date, Description, Reference, and Amount (or Debit and Credit). OFX/QIF carry their own dates. Up to 2 MB.">
+            <Input type="file" accept=".csv,.ofx,.qfx,.qif,text/csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} required />
           </Label></div>
           <label className="flex items-center gap-2 text-sm sm:col-span-3">
             <input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} /> This file overlaps an earlier statement: skip lines already imported (then enter the balance at the start of the new lines)
@@ -103,6 +103,7 @@ export function BankStatementPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [picking, setPicking] = useState<BankLine | null>(null)
+  const [creating, setCreating] = useState<BankLine | null>(null)
   const reload = () => { st.reload(); lines.reload() }
 
   const run = async (fn: () => Promise<unknown>, ok?: (r: any) => string) => {
@@ -130,6 +131,8 @@ export function BankStatementPage() {
       <div className="flex flex-wrap gap-2">
         {!done && <Button variant="subtle" disabled={busy} onClick={() => run(() => banking.autoMatch(sid), (r) => `Matched ${r.matched}; ${r.ambiguous} ambiguous, ${r.no_candidate} with no candidate`)}>Auto-match</Button>}
         {!done && <Button disabled={busy || !sum.can_complete} onClick={() => run(() => banking.complete(sid), () => 'Statement reconciled')}>Mark as reconciled</Button>}
+        <Button variant="subtle" disabled={busy} onClick={() => run(() => banking.reportCsv(sid))}>Report (CSV)</Button>
+        <Button variant="subtle" disabled={busy} onClick={() => run(() => banking.reportPdf(sid))}>Report (PDF)</Button>
         {done && <Button variant="subtle" disabled={busy} onClick={() => run(() => banking.reopen(sid), () => 'Reconciliation reopened')}>Reopen</Button>}
         {!done && <Button variant="ghost" disabled={busy} onClick={() => { if (confirm('Discard this imported statement and its matches? Your books are not affected.')) run(() => banking.discard(sid)).then(() => nav('/banking')) }}>Discard import</Button>}
       </div>
@@ -149,10 +152,12 @@ export function BankStatementPage() {
                     {!done && <button type="button" className="text-xs text-indigo-600 underline" disabled={busy} onClick={() => run(() => banking.unmatch(sid, m.id))}>Unmatch</button>}
                   </div>))}
                 {!done && l.status !== 'matched' && <Button variant="subtle" className="mt-1" onClick={() => setPicking(l)}>Match…</Button>}
+                {!done && l.status === 'unmatched' && <Button variant="subtle" className="mt-1 ml-2" onClick={() => setCreating(l)}>Create…</Button>}
               </td>
             </tr>))}</tbody>
         </table>
       </Card>
+      {creating && <CreateModal statementId={sid} line={creating} onClose={() => setCreating(null)} onDone={() => { setCreating(null); reload() }} />}
       {picking && <CandidateModal statementId={sid} line={picking} onClose={() => setPicking(null)} onDone={() => { setPicking(null); reload() }} />}
     </div>
   )
@@ -185,5 +190,83 @@ function CandidateModal({ statementId, line, onClose, onDone }: { statementId: n
         </table>
       )}
     </Modal>
+  )
+}
+
+/** Records the bank's own line (a fee, interest, a direct payment) as an expense or income entry and matches it. Branch comes from the account. */
+function CreateModal({ statementId, line, onClose, onDone }: { statementId: number; line: BankLine; onClose(): void; onDone(): void }) {
+  const [cats, setCats] = useState<Account[]>([])
+  const sug = useFetch<BankSuggestion[]>(() => banking.suggestions(statementId), [statementId])
+  const [category, setCategory] = useState('')
+  const [tax, setTax] = useState('0')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const out = Number(line.amount) < 0
+  useEffect(() => { accounts.list().then((a) => setCats(a.filter((x) => !x.is_cash_bank && (out ? x.type === 'expense' : x.type === 'income')))) }, [out])
+  useEffect(() => {
+    const s = sug.data?.find((x) => x.line === line.id)
+    if (s?.category) { setCategory(String(s.category)); setTax(String(s.tax_rate)) }
+  }, [sug.data, line.id])
+  const go = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true); setError(null)
+    try { await banking.createFromLine(statementId, { line: line.id, category: Number(category), tax_rate: tax }); onDone() } catch (err: any) { setError(err.message) } finally { setBusy(false) }
+  }
+  return (
+    <Modal title={`Record ${money(line.amount)} from ${line.date}`} onClose={onClose}>
+      <ErrorBox error={error} />
+      <p className="mb-3 text-sm text-slate-600">This posts a {out ? 'cash expense' : 'cash income'} entry for "{line.description}" to this bank account and matches it to the line. A bank rule, if one fits, pre-fills the category.</p>
+      <form className="space-y-3" onSubmit={go}>
+        <Label text={out ? 'Expense account' : 'Income account'}>
+          <Select value={category} onChange={(e) => setCategory(e.target.value)} required>
+            <option value="">Choose…</option>{cats.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+          </Select>
+        </Label>
+        <Label text="VAT rate % (amount is VAT-inclusive)"><Input type="number" step="0.01" min={0} value={tax} onChange={(e) => setTax(e.target.value)} /></Label>
+        <Button disabled={busy || !category}>{busy ? 'Posting…' : 'Record and match'}</Button>
+      </form>
+    </Modal>
+  )
+}
+
+/** Bank rules: category (and VAT) suggestions for statement lines. They only pre-fill; nothing posts without a click. */
+export function BankRulesPage() {
+  const { org } = useAuth()
+  const toast = useToast()
+  const list = useFetch(() => bankRules.list(), [org?.id])
+  const [cats, setCats] = useState<Account[]>([])
+  const [f, setF] = useState({ name: '', contains: '', direction: 'any', category: '', tax_rate: '0', priority: '100' })
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => { accounts.list().then((a) => { setCats(a.filter((x) => !x.is_cash_bank && (x.type === 'expense' || x.type === 'income'))) }) }, [org?.id])
+  const add = async (e: FormEvent) => {
+    e.preventDefault(); setError(null)
+    try { await bankRules.create({ ...f, category: Number(f.category), priority: Number(f.priority) }); toast.success('Rule added'); setF({ ...f, name: '', contains: '' }); list.reload() } catch (err: any) { setError(err.message) }
+  }
+  const toggle = async (r: BankRuleRow) => { try { await bankRules.update(r.id, { is_active: !r.is_active }); list.reload() } catch (err: any) { setError(err.message) } }
+  return (
+    <div className="max-w-5xl space-y-4">
+      <PageHeader title="Bank rules" subtitle="If a statement line's description contains the text, suggest this category and VAT rate. Lowest priority number wins." />
+      <ErrorBox error={error} />
+      <Card>
+        <form className="grid gap-3 sm:grid-cols-3" onSubmit={add}>
+          <Label text="Name"><Input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} required /></Label>
+          <Label text="Description contains"><Input value={f.contains} onChange={(e) => setF({ ...f, contains: e.target.value })} required /></Label>
+          <Label text="Applies to"><Select value={f.direction} onChange={(e) => setF({ ...f, direction: e.target.value })}><option value="any">Money in or out</option><option value="out">Money out</option><option value="in">Money in</option></Select></Label>
+          <Label text="Category"><Select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} required><option value="">Choose…</option>{cats.map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}</Select></Label>
+          <Label text="VAT rate %"><Input type="number" step="0.01" min={0} value={f.tax_rate} onChange={(e) => setF({ ...f, tax_rate: e.target.value })} /></Label>
+          <Label text="Priority"><Input type="number" value={f.priority} onChange={(e) => setF({ ...f, priority: e.target.value })} /></Label>
+          <div><Button>Add rule</Button></div>
+        </form>
+      </Card>
+      {list.loading ? <Spinner /> : !list.data?.length ? <EmptyState title="No rules yet" text="Add one above." /> : (
+        <Card className="overflow-x-auto !p-0"><table className="w-full text-sm">
+          <thead><tr className="border-b text-left text-slate-500"><th className="px-4 py-2">Name</th><th>Contains</th><th>Direction</th><th>Category</th><th>VAT %</th><th>Priority</th><th /></tr></thead>
+          <tbody>{list.data.map((r) => (
+            <tr key={r.id} className={`border-b last:border-0 ${r.is_active ? '' : 'text-slate-400'}`}>
+              <td className="px-4 py-2">{r.name}</td><td>{r.contains}</td><td>{r.direction}</td><td>{r.category_name}</td><td>{r.tax_rate}</td><td>{r.priority}</td>
+              <td className="pr-4 text-right"><button type="button" className="text-indigo-600 underline" onClick={() => toggle(r)}>{r.is_active ? 'Disable' : 'Enable'}</button></td>
+            </tr>))}</tbody>
+        </table></Card>
+      )}
+    </div>
   )
 }

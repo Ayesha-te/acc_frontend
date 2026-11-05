@@ -49,6 +49,23 @@ export async function apiDownload(path: string, filename: string): Promise<void>
   URL.revokeObjectURL(url)
 }
 
+/** Authenticated PDF: fetched with the token, then opened in a new tab (a plain link could not carry the token). */
+export async function apiOpenPdf(path: string, query: Record<string, string | undefined> = {}): Promise<void> {
+  const headers: Record<string, string> = {}
+  if (session.token) headers.Authorization = `Token ${session.token}`
+  if (session.orgId) headers['X-Organization-ID'] = session.orgId
+  const qs = '?' + new URLSearchParams(Object.entries(query).filter(([, v]) => v) as [string, string][])
+  const res = await fetch(`${BASE}${path}${qs}`, { headers })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new ApiError(res.status, describe(data) || 'Could not open the PDF', data?.code, data)
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const w = window.open(url, '_blank')
+  if (!w) Object.assign(document.createElement('a'), { href: url, download: 'document.pdf' }).click()  // pop-up blocked: download instead
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
+}
+
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown; query?: Record<string, string | number | undefined> } = {}): Promise<T> {
   const qs = opts.query ? '?' + new URLSearchParams(Object.entries(opts.query).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])) : ''
   const headers: Record<string, string> = { 'Content-Type': 'application/json' }

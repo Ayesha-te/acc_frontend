@@ -5,15 +5,15 @@ import { Button, Select } from './ui'
 
 const nav: [string, [string, string][]][] = [
   ['', [['/', 'Dashboard']]],
-  ['Sales', [['/sales', 'Sales invoices'], ['/sales/returns', 'Sales returns'], ['/receipts', 'Receipts (money in)']]],
-  ['Purchases', [['/purchases', 'Purchase invoices'], ['/purchases/returns', 'Purchase returns'], ['/payments', 'Payments (money out)'], ['/expenses', 'Expenses']]],
+  ['Sales', [['/sales/quotes', 'Quotes'], ['/sales/orders', 'Sales orders'], ['/sales', 'Sales invoices'], ['/sales/returns', 'Sales returns'], ['/receipts', 'Receipts (money in)'], ['/credits/sales', 'Customer credits'], ['/recurring', 'Recurring invoices']]],
+  ['Purchases', [['/purchases/orders', 'Purchase orders'], ['/purchases', 'Purchase invoices'], ['/purchases/returns', 'Purchase returns'], ['/payments', 'Payments (money out)'], ['/credits/purchases', 'Supplier credits'], ['/expenses', 'Expenses'], ['/recurring-expenses', 'Recurring expenses']]],
   ['Vouchers', [['/vouchers/journal', 'Journal vouchers'], ['/vouchers/general', 'General vouchers'], ['/vouchers/contra', 'Contra (cash ⇄ bank)'], ['/vouchers/opening', 'Opening balances']]],
-  ['Banking', [['/banking', 'Bank statements']]],
+  ['Banking', [['/banking', 'Bank statements'], ['/banking/rules', 'Bank rules']]],
   ['Reports', [['/reports/profit-loss', 'Profit & Loss'], ['/reports/balance-sheet', 'Balance Sheet'], ['/reports/trial-balance', 'Trial Balance'],
-    ['/reports/aging', 'Aging'], ['/reports/vendor', 'Vendor report'], ['/reports/sales-summary', 'Sales summary'], ['/reports/vat-summary', 'VAT summary']]],
-  ['Stock & production', [['/inventory/items', 'Items'], ['/inventory/stock', 'Stock on hand'], ['/inventory/production', 'Production']]],
+    ['/reports/aging', 'Aging'], ['/reports/vendor', 'Vendor report'], ['/reports/sales-summary', 'Sales summary'], ['/reports/vat-summary', 'VAT summary'], ['/reports/vat-return', 'VAT return worksheet']]],
+  ['Stock & production', [['/inventory/items', 'Items'], ['/inventory/stock', 'Stock on hand'], ['/inventory/valuation', 'Valuation'], ['/inventory/production', 'Production']]],
   ['Van loading', [['/dispatch/loads', 'Van loads'], ['/dispatch/vehicles', 'Vehicles']]],
-  ['Setup', [['/parties', 'Customers & suppliers'], ['/accounts', 'Chart of accounts'], ['/settings/tax-rates', 'Tax rates'], ['/settings/branches', 'Branches'], ['/settings/period-lock', 'Period lock']]],
+  ['Setup', [['/parties', 'Customers & suppliers'], ['/accounts', 'Chart of accounts'], ['/settings/tax-rates', 'Tax rates'], ['/settings/branches', 'Branches'], ['/settings/period-lock', 'Period lock'], ['/settings/approvals', 'Approvals']]],
 ]
 
 const quick: [string, string][] = [

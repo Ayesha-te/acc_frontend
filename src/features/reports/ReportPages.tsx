@@ -85,7 +85,7 @@ export function TrialBalancePage() {
         <Table head={['Code', 'Account', 'Type', 'Debit', 'Credit']} right={2}>
           {data.rows.map((x: any) => (
             <tr key={x.account} className="border-t border-slate-100">
-              <td className="px-4 py-2 text-slate-500">{x.code}</td><td className="px-4 py-2">{x.name}</td><td className="px-4 py-2 capitalize text-slate-500">{x.type}</td>
+              <td className="px-4 py-2 text-slate-500">{x.code}</td><td className="px-4 py-2" style={{ paddingLeft: 16 + (x.depth ?? 0) * 18 }}>{x.name}{(x.rollup_debit !== x.debit || x.rollup_credit !== x.credit) && <span className="ml-2 text-xs text-slate-400">(with sub-accounts: {Number(x.rollup_debit) ? `Dr ${money(x.rollup_debit)}` : Number(x.rollup_credit) ? `Cr ${money(x.rollup_credit)}` : '0'})</span>}</td><td className="px-4 py-2 capitalize text-slate-500">{x.type}</td>
               <td className="px-4 py-2 text-right tabular-nums">{Number(x.debit) ? money(x.debit) : ''}</td>
               <td className="px-4 py-2 text-right tabular-nums">{Number(x.credit) ? money(x.credit) : ''}</td>
             </tr>
@@ -222,6 +222,39 @@ export function VatSummaryPage() {
           <Card className="flex items-center justify-between text-lg font-semibold md:col-span-2">
             <span>{Number(data.net_payable) < 0 ? 'Net refundable' : 'Net payable'}</span><Amount v={data.net_payable} bold />
           </Card>
+        </div>
+      )}
+    </ReportShell>
+  )
+}
+
+export function VatReturnPage() {
+  const { org } = useAuth()
+  const r = useRange('quarter')
+  const { data, loading, error } = useFetch(() => report('vat-return', { date_from: r.from, date_to: r.to }), [org?.id, r.from, r.to])
+  const table = (title: string, s: any) => (
+    <Card className="overflow-x-auto p-0">
+      <h2 className="px-4 pt-4 text-sm font-semibold">{title}</h2>
+      <table className="w-full text-sm">
+        <thead className="text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2">Rate</th><th className="text-right">Taxable amount</th><th className="px-4 text-right">Tax</th></tr></thead>
+        <tbody>
+          {s.rows.map((x: any) => <tr key={x.rate} className="border-t border-slate-100"><td className="px-4 py-2">{Number(x.rate)}%{Number(x.rate) === 0 && <span className="ml-1 text-xs text-slate-400">(zero-rated or exempt; not distinguished)</span>}</td><td className="text-right tabular-nums">{money(x.taxable)}</td><td className="px-4 text-right tabular-nums">{money(x.tax)}</td></tr>)}
+          <tr className="border-t font-semibold"><td className="px-4 py-2">Total</td><td className="text-right tabular-nums">{money(s.taxable)}</td><td className="px-4 text-right tabular-nums">{money(s.tax)}</td></tr>
+        </tbody>
+      </table>
+    </Card>
+  )
+  return (
+    <ReportShell title="VAT return worksheet" subtitle="Taxable amounts and tax by rate, from posted documents" loading={loading} error={error}
+      filters={<RangeBar r={r} />}
+      note="A worksheet to help prepare a return, reconciled to your tax accounts. It is not a filing and does not follow an official return layout. Entries made by manual journals appear under 'other ledger adjustments'."
+      onCsv={data && (() => downloadCsv('vat-return.csv', ['Side', 'Rate', 'Taxable', 'Tax'], [...data.output.rows.map((x: any) => ['Output', x.rate, x.taxable, x.tax]), ...data.input.rows.map((x: any) => ['Input', x.rate, x.taxable, x.tax]), ['Net payable', '', '', data.net_payable]]))}>
+      {data && (
+        <div className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">{table('Sales and other income (output)', data.output)}{table('Purchases and expenses (input)', data.input)}</div>
+          <Card className="flex items-center justify-between text-lg font-semibold"><span>{Number(data.net_payable) < 0 ? 'Net refundable' : 'Net payable'}</span><Amount v={data.net_payable} bold /></Card>
+          {(Number(data.other_ledger_adjustments.output_tax) !== 0 || Number(data.other_ledger_adjustments.input_tax) !== 0) && (
+            <Card className="text-sm text-amber-800">Other ledger adjustments (manual journals): output tax {money(data.other_ledger_adjustments.output_tax)}, input tax {money(data.other_ledger_adjustments.input_tax)}. They are not in the totals above.</Card>)}
         </div>
       )}
     </ReportShell>

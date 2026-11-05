@@ -7,13 +7,17 @@ import { useAuth } from './features/auth/AuthContext'
 import { LoginPage } from './features/auth/LoginPage'
 import { LoadForm, LoadsPage, VehiclesPage } from './features/dispatch/DispatchPages'
 import { ItemsPage, ProductionForm, StockPage } from './features/inventory/InventoryPages'
-import { AgingPage, BalanceSheetPage, ProfitLossPage, SalesSummaryPage, TrialBalancePage, VatSummaryPage, VendorReportPage } from './features/reports/ReportPages'
+import { AgingPage, BalanceSheetPage, ProfitLossPage, SalesSummaryPage, TrialBalancePage, VatReturnPage, VatSummaryPage, VendorReportPage } from './features/reports/ReportPages'
 import { InvoiceForm } from './features/sales/DocumentForm'
-import { AccountsPage, BranchesPage, OrganizationsPage, PartiesPage, PeriodLockPage, TaxRatesPage } from './features/setup/SetupPages'
+import { AccountsPage, ApprovalSettingsPage, BranchesPage, OrganizationsPage, PartiesPage, PeriodLockPage, TaxRatesPage } from './features/setup/SetupPages'
 import { CashForm } from './features/treasury/CashForm'
 import { VoucherForm } from './features/vouchers/VoucherForm'
 import { ExpenseForm } from './features/expenses/ExpenseForm'
-import { BankStatementPage, BankStatementsPage } from './features/banking/BankingPages'
+import { BankRulesPage, BankStatementPage, BankStatementsPage } from './features/banking/BankingPages'
+import { CreditsPage } from './features/treasury/CreditsPage'
+import { OrderForm, OrdersPage } from './features/orders/OrderPages'
+import { RecurringExpenseForm, RecurringExpensesPage, RecurringForm, RecurringPage } from './features/recurring/RecurringPages'
+import { ValuationPage } from './features/inventory/ValuationPage'
 import { money } from './lib/format'
 
 const amt = (key: string, label: string): Column => ({ key, label, align: 'right', render: (r) => money(r[key]) })
@@ -65,7 +69,23 @@ export default function App() {
             <Route path="receipts/new" element={<CashForm path="receipts" partyKind="customer" title="Receive money from a customer" />} />
             <Route path="payments" element={<Register key={k} title="Payments" subtitle="Money paid to suppliers" path="payments" columns={cashCols} createTo="/payments/new" createLabel="Pay a supplier" canWrite={w} />} />
             <Route path="payments/new" element={<CashForm path="payments" partyKind="supplier" title="Pay a supplier" />} />
+            <Route path="sales/quotes" element={<OrdersPage key={k} kind="quote" />} />
+            <Route path="sales/quotes/new" element={<OrderForm key={k} kind="quote" />} />
+            <Route path="sales/quotes/:id/edit" element={<OrderForm key={k} kind="quote" />} />
+            <Route path="sales/orders" element={<OrdersPage key={k} kind="order" />} />
+            <Route path="sales/orders/new" element={<OrderForm key={k} kind="order" />} />
+            <Route path="sales/orders/:id/edit" element={<OrderForm key={k} kind="order" />} />
+            <Route path="purchases/orders" element={<OrdersPage key={k} kind="purchase" />} />
+            <Route path="purchases/orders/new" element={<OrderForm key={k} kind="purchase" />} />
+            <Route path="purchases/orders/:id/edit" element={<OrderForm key={k} kind="purchase" />} />
+            <Route path="recurring" element={<RecurringPage key={k} />} />
+            <Route path="recurring/new" element={<RecurringForm key={k} />} />
+            <Route path="recurring-expenses" element={<RecurringExpensesPage key={k} />} />
+            <Route path="recurring-expenses/new" element={<RecurringExpenseForm key={k} />} />
+            <Route path="credits/sales" element={<CreditsPage key={k} side="sales" />} />
+            <Route path="credits/purchases" element={<CreditsPage key={k} side="purchases" />} />
             <Route path="banking" element={<BankStatementsPage key={k} />} />
+            <Route path="banking/rules" element={<BankRulesPage key={k} />} />
             <Route path="banking/:id" element={<BankStatementPage key={k} />} />
             <Route path="expenses" element={<Register key={k} title="Expenses" subtitle="Money spent without a supplier bill" path="expenses" columns={expenseCols} createTo="/expenses/new" createLabel="New expense" canWrite={w} />} />
             <Route path="expenses/new" element={<ExpenseForm key={k} />} />
@@ -82,6 +102,8 @@ export default function App() {
             <Route path="reports/vendor" element={<VendorReportPage key={k} />} />
             <Route path="reports/sales-summary" element={<SalesSummaryPage key={k} />} />
             <Route path="reports/vat-summary" element={<VatSummaryPage key={k} />} />
+            <Route path="reports/vat-return" element={<VatReturnPage key={k} />} />
+            <Route path="inventory/valuation" element={<ValuationPage key={k} />} />
             <Route path="inventory/items" element={<ItemsPage key={k} />} />
             <Route path="inventory/stock" element={<StockPage key={k} />} />
             <Route path="inventory/production" element={<Register key={k} title="Production" subtitle="Raw materials consumed to make finished goods" path="inventory/production" columns={productionCols} createTo="/inventory/production/new" createLabel="New production run" canWrite={w} />} />
@@ -93,6 +115,7 @@ export default function App() {
             <Route path="accounts" element={<AccountsPage key={k} />} />
             <Route path="settings/tax-rates" element={<TaxRatesPage key={k} />} />
             <Route path="settings/branches" element={<BranchesPage key={k} />} />
+            <Route path="settings/approvals" element={<ApprovalSettingsPage key={k} />} />
             <Route path="settings/period-lock" element={<PeriodLockPage key={k} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>

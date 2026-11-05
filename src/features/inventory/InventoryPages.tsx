@@ -90,7 +90,7 @@ export function StockPage() {
   const stock = useFetch(() => documents('inventory/stock').list({ page_size: 200, search, kind }), [org?.id, search, kind])
   const itemList = useFetch(() => items.list({ is_active: 'true' }), [org?.id])
   const locs = useFetch(() => locations.list(), [org?.id])
-  const [f, setF] = useState({ item: '', location: '', mode: 'opening', quantity: '', note: '' })
+  const [f, setF] = useState({ item: '', location: '', mode: 'opening', quantity: '', note: '', unit_cost: '' })
   const [error, setError] = useState<string | null>(null)
 
   const save = async (e: FormEvent) => {
@@ -99,10 +99,10 @@ export function StockPage() {
     try {
       await resource('inventory/adjustments').create({
         item: Number(f.item), location: f.location ? Number(f.location) : undefined, date: todayDubai(),
-        type: f.mode === 'opening' ? 'opening' : 'adjustment', quantity: f.mode === 'remove' ? -Math.abs(n) : Math.abs(n), note: f.note,
+        type: f.mode === 'opening' ? 'opening' : 'adjustment', quantity: f.mode === 'remove' ? -Math.abs(n) : Math.abs(n), note: f.note, unit_cost: f.unit_cost || undefined,
       })
       toast.success('Stock updated')
-      setAdjusting(false); setF({ ...f, quantity: '', note: '' }); setError(null); stock.reload()
+      setAdjusting(false); setF({ ...f, quantity: '', note: '', unit_cost: '' }); setError(null); stock.reload()
     } catch (err: any) { setError(err.message) }
   }
 
@@ -156,6 +156,7 @@ export function StockPage() {
               </Select>
             </Label>
             <Label text="Quantity"><Input type="number" step="any" min="0.0001" value={f.quantity} onChange={(e) => setF({ ...f, quantity: e.target.value })} required /></Label>
+            <Label text="Unit cost" hint="Needed when adding stock and inventory costing is on; ignored otherwise"><Input type="number" step="any" min="0" value={f.unit_cost} onChange={(e) => setF({ ...f, unit_cost: e.target.value })} /></Label>
             <Label text="Note (optional)"><Input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Label>
             <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setAdjusting(false)}>Cancel</Button><Button>Save</Button></div>
           </form>

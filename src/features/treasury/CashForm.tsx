@@ -4,6 +4,7 @@ import { api } from '../../api/client'
 import { Account, accounts, documents } from '../../api/endpoints'
 import { BranchSelect } from '../../components/BranchSelect'
 import { PartySelect } from '../../components/PartySelect'
+import { TaxSelect, useTaxRates } from '../../components/TaxSelect'
 import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { money, todayDubai } from '../../lib/format'
 import { useSubmit } from '../../lib/useSubmit'
@@ -15,6 +16,12 @@ type Open = { id: number; number: string; due_date: string; outstanding: string;
 export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payments'; partyKind: 'customer' | 'supplier'; title: string }) {
   const nav = useNavigate()
   const toast = useToast()
+  const rates = useTaxRates().data
+  // 'party' settles customer/supplier invoices; 'account' posts straight to an income/expense account, optionally with VAT.
+  const [mode, setMode] = useState<'party' | 'account'>('party')
+  const [counter, setCounter] = useState('')
+  const [taxRate, setTaxRate] = useState('0')
+  const [allAccounts, setAll] = useState<Account[]>([])
   const [cashAccounts, setCash] = useState<Account[]>([])
   const [f, setF] = useState({ party: '', cash_account: '', amount: '', date: todayDubai(), method: 'cash', reference: '', narration: '', branch: '' })
   const [openAll, setOpen] = useState<Open[]>([])
@@ -26,6 +33,7 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
     accounts.list().then((a) => {
       const c = a.filter((x) => x.is_cash_bank)
       setCash(c)
+      setAll(a)
       if (c[0]) setF((p) => ({ ...p, cash_account: String(c[0].id) }))
     })
   }, [])
@@ -48,7 +56,9 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
     setAlloc(next)
   }
   const { submit, busy, error } = useSubmit(
-    (idempotency_key) => documents(path).create({
+    (idempotency_key) => documents(path).create(mode === 'account'
+      ? { ...f, party: null, counter_account: Number(counter), tax_rate: taxRate || '0', cash_account: Number(f.cash_account), branch: f.branch ? Number(f.branch) : null, idempotency_key }
+      : {
         ...f, party: Number(f.party), cash_account: Number(f.cash_account), branch: f.branch ? Number(f.branch) : null, idempotency_key,
         allocations: Object.entries(alloc).filter(([, v]) => Number(v) > 0).map(([id, amount]) => ({ invoice: Number(id), amount })),
       }),
@@ -59,7 +69,18 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
       <PageHeader title={title} />
       <ErrorBox error={error} />
       <Card className="grid gap-3 sm:grid-cols-2">
-        <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={f.party} onChange={(v) => up({ party: v })} /></Label>
+        <div className="sm:col-span-2 flex gap-4 text-sm">
+          <label className="flex items-center gap-1"><input type="radio" checked={mode === 'party'} onChange={() => setMode('party')} /> {partyKind === 'customer' ? 'From a customer' : 'To a supplier'}</label>
+          <label className="flex items-center gap-1"><input type="radio" checked={mode === 'account'} onChange={() => setMode('account')} /> {path === 'receipts' ? 'Other income (no customer)' : 'Other payment (no supplier)'}</label>
+        </div>
+        {mode === 'party'
+          ? <Label text={partyKind === 'customer' ? 'Customer' : 'Supplier'}><PartySelect kind={partyKind} value={f.party} onChange={(v) => up({ party: v })} /></Label>
+          : <Label text={path === 'receipts' ? 'Income account' : 'Expense / other account'}>
+              <Select value={counter} onChange={(e) => setCounter(e.target.value)} required>
+                <option value="">Select…</option>
+                {allAccounts.filter((a) => !a.is_cash_bank && a.is_active !== false && !a.system_code?.startsWith('ACCOUNTS_') && !a.system_code?.startsWith('TAX_')).map((a) => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+              </Select>
+            </Label>}
         <Label text="Date"><Input type="date" value={f.date} onChange={(e) => up({ date: e.target.value })} required /></Label>
         <BranchSelect value={f.branch} onChange={(v) => up({ branch: v })} />
         <Label text="Amount"><Input type="number" step="0.01" min="0.01" value={f.amount} onChange={(e) => up({ amount: e.target.value })} required /></Label>
@@ -68,6 +89,7 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
             {cashAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>
         </Label>
+        {mode === 'account' && <Label text="VAT included in the amount" hint="The amount is the cash total; the VAT is backed out of it."><TaxSelect rates={rates} value={taxRate} onChange={setTaxRate} /></Label>}
         <Label text="Method">
           <Select value={f.method} onChange={(e) => up({ method: e.target.value })}>
             {['cash', 'bank_transfer', 'cheque', 'card', 'other'].map((m) => <option key={m} value={m}>{m.replace('_', ' ')}</option>)}
@@ -76,7 +98,7 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
         <Label text="Reference"><Input value={f.reference} onChange={(e) => up({ reference: e.target.value })} /></Label>
         <div className="sm:col-span-2"><Label text="Narration"><Input value={f.narration} onChange={(e) => up({ narration: e.target.value })} /></Label></div>
       </Card>
-      {open.length > 0 && (
+      {mode === 'party' && open.length > 0 && (
         <Card className="space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-medium">Apply to invoices</h2>
@@ -93,8 +115,10 @@ export function CashForm({ path, partyKind, title }: { path: 'receipts' | 'payme
           <div className={`text-right text-sm ${unapplied < 0 ? 'text-red-600' : 'text-slate-600'}`}>Applied {money(applied)} · Unapplied {money(unapplied)}</div>
         </Card>
       )}
+      {mode === 'account' && Number(taxRate) > 0 && Number(f.amount) > 0 && (
+        <p className="text-sm text-slate-600">Of {money(f.amount)}: {money(Number(f.amount) - (Number(f.amount) * Number(taxRate)) / (100 + Number(taxRate)))} to the account and {money((Number(f.amount) * Number(taxRate)) / (100 + Number(taxRate)))} {path === 'receipts' ? 'output' : 'input'} VAT.</p>)}
       <div className="flex gap-2">
-        <Button disabled={busy || unapplied < 0}>{busy ? 'Saving…' : 'Post'}</Button>
+        <Button disabled={busy || (mode === 'party' && unapplied < 0)}>{busy ? 'Saving…' : 'Post'}</Button>
         <Button type="button" variant="ghost" onClick={() => nav(`/${path}`)}>Cancel</Button>
       </div>
     </form>

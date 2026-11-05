@@ -6,10 +6,10 @@ import { PartySelect } from '../../components/PartySelect'
 import { TaxHint, TaxSelect, useTaxRates } from '../../components/TaxSelect'
 import { Button, Card, ErrorBox, Input, Label, PageHeader, Select } from '../../components/ui'
 import { money, todayDubai } from '../../lib/format'
+import { checkReceipts } from '../../lib/receiptFiles'
 import { useSubmit } from '../../lib/useSubmit'
 import { useToast } from '../../lib/toast'
 
-const MAX_BYTES = 5 * 1024 * 1024
 
 /** Record money spent without a supplier bill: pick a category (expense account), what it was paid from, and an optional receipt. */
 export function ExpenseForm() {
@@ -27,7 +27,9 @@ export function ExpenseForm() {
   const [reference, setReference] = useState('')
   const [narration, setNarration] = useState('')
   const [branch, setBranch] = useState('')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
+  const [billable, setBillable] = useState(false)
+  const [customer, setCustomer] = useState('')
   const [fileError, setFileError] = useState<string | null>(null)
   useEffect(() => { accounts.list().then(setAccts) }, [])
 
@@ -37,9 +39,11 @@ export function ExpenseForm() {
   const tax = inclusive ? amt - sub : (amt * rate) / 100
   const total = inclusive ? amt : amt + tax
 
-  const pick = (f: File | null) => {
-    setFileError(f && f.size > MAX_BYTES ? 'Receipt is larger than 5 MB.' : null)
-    setFile(f && f.size <= MAX_BYTES ? f : null)
+  const pick = (list: FileList | null) => {
+    const all = Array.from(list ?? [])
+    const c = checkReceipts(all)
+    setFileError(c.message)
+    setFiles(c.ok ? all : [])
   }
 
   const { submit, busy, error } = useSubmit(
@@ -47,16 +51,16 @@ export function ExpenseForm() {
       documents('expenses').create({
         date, idempotency_key, amount, tax_rate: taxRate || '0', amount_includes_tax: inclusive, reference, narration,
         expense_account: Number(category), paid_through: Number(paidThrough), vendor: vendor ? Number(vendor) : null,
-        branch: branch ? Number(branch) : null,
+        branch: branch ? Number(branch) : null, is_billable: billable, customer: billable && customer ? Number(customer) : null,
       }),
     async (doc: any) => {
-      if (file) {
-        try { await expenses.uploadReceipt(doc.id, file) } catch (e: any) {
-          toast.error(`${doc.number} posted, but the receipt could not be attached: ${e.message}`)
+      for (const f of files) {
+        try { await expenses.addReceipt(doc.id, f) } catch (e: any) {
+          toast.error(`${doc.number} saved, but a receipt could not be attached: ${e.message}`)
           nav('/expenses'); return
         }
       }
-      toast.success(`${doc.number} recorded`)
+      toast.success(doc.status === 'pending' ? `${doc.number} saved and waiting for approval` : `${doc.number} recorded`)
       nav('/expenses')
     },
   )
@@ -87,11 +91,15 @@ export function ExpenseForm() {
         </label>
         <div className="sm:col-span-2"><TaxHint rates={rates.data} /></div>
         <div className="sm:col-span-2"><Label text="Supplier (optional)"><PartySelect kind="supplier" value={vendor} onChange={setVendor} optional /></Label></div>
+        <label className="flex items-center gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" checked={billable} onChange={(e) => setBillable(e.target.checked)} /> Billable: charge this cost to a customer on a sales invoice
+        </label>
+        {billable && <div className="sm:col-span-2"><Label text="Customer to bill"><PartySelect kind="customer" value={customer} onChange={setCustomer} /></Label></div>}
         <Label text="Reference (optional)"><Input value={reference} onChange={(e) => setReference(e.target.value)} maxLength={100} /></Label>
         <Label text="Notes (optional)"><Input value={narration} onChange={(e) => setNarration(e.target.value)} maxLength={500} /></Label>
         <div className="sm:col-span-2">
-          <Label text="Receipt (optional, PDF, PNG or JPEG up to 5 MB)">
-            <Input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => pick(e.target.files?.[0] ?? null)} />
+          <Label text="Receipts (optional, up to 5 files: PDF, PNG or JPEG, 5 MB each)">
+            <Input type="file" multiple accept="application/pdf,image/png,image/jpeg" onChange={(e) => pick(e.target.files)} />
           </Label>
           {fileError && <p className="mt-1 text-sm text-red-600">{fileError}</p>}
         </div>
@@ -100,7 +108,7 @@ export function ExpenseForm() {
         <span>Before tax {money(sub)}</span><span>Tax {money(tax)}</span><span className="font-semibold">Total {money(total)}</span>
       </Card>
       <div className="flex gap-2">
-        <Button disabled={busy || !category || !paidThrough || !(amt > 0)}>{busy ? 'Saving…' : 'Record expense'}</Button>
+        <Button disabled={busy || !category || !paidThrough || !(amt > 0) || (billable && !customer)}>{busy ? 'Saving…' : 'Record expense'}</Button>
         <Button type="button" variant="ghost" onClick={() => nav('/expenses')}>Cancel</Button>
       </div>
     </form>

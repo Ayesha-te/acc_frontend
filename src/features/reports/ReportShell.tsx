@@ -61,7 +61,8 @@ export const Amount = ({ v, bold }: { v: string | number; bold?: boolean }) => (
   <span className={`tabular-nums ${Number(v) < 0 ? 'text-red-600' : ''} ${bold ? 'font-semibold' : ''}`}>{money(v)}</span>
 )
 
-export function Section({ title, rows, total, totalLabel }: { title: string; rows: { code?: string; name: string; amount: string }[]; total: string; totalLabel: string }) {
+export function Section({ title, rows, total, totalLabel }: { title: string; rows: { code?: string; name: string; amount: string; depth?: number; rollup_amount?: string }[]; total: string; totalLabel: string }) {
+  const nested = rows.some((r) => r.depth !== undefined && r.rollup_amount !== undefined && r.rollup_amount !== r.amount)
   return (
     <Card className="p-0">
       <div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-sm font-semibold">{title}</div>
@@ -69,13 +70,14 @@ export function Section({ title, rows, total, totalLabel }: { title: string; row
         <tbody>
           {rows.map((r, i) => (
             <tr key={i} className="border-t border-slate-100 first:border-t-0">
-              <td className="px-4 py-2 text-slate-500">{r.code}</td><td className="px-4 py-2">{r.name}</td>
+              <td className="px-4 py-2 text-slate-500">{r.code}</td><td className="px-4 py-2" style={{ paddingLeft: 16 + (r.depth ?? 0) * 18 }}>{r.name}</td>
+              {nested && <td className="px-4 py-2 text-right text-slate-400" title="Including sub-accounts">{r.rollup_amount !== undefined && r.rollup_amount !== r.amount ? <Amount v={r.rollup_amount} /> : ''}</td>}
               <td className="px-4 py-2 text-right"><Amount v={r.amount} /></td>
             </tr>
           ))}
-          {!rows.length && <tr><td className="px-4 py-3 text-slate-500" colSpan={3}>No entries in this period.</td></tr>}
+          {!rows.length && <tr><td className="px-4 py-3 text-slate-500" colSpan={4}>No entries in this period.</td></tr>}
           <tr className="border-t-2 border-slate-200 bg-slate-50 font-semibold">
-            <td className="px-4 py-2" colSpan={2}>{totalLabel}</td><td className="px-4 py-2 text-right"><Amount v={total} bold /></td>
+            <td className="px-4 py-2" colSpan={nested ? 3 : 2}>{totalLabel}</td><td className="px-4 py-2 text-right"><Amount v={total} bold /></td>
           </tr>
         </tbody>
       </table>
