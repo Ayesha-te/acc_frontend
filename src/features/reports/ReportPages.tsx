@@ -48,7 +48,7 @@ export function BalanceSheetPage() {
   return (
     <ReportShell title="Balance Sheet" subtitle="What you own, owe and the owners' stake" loading={loading} error={error}
       filters={<AsOfBar v={a.asOf} set={a.setAsOf} />}
-      note="Profit that has not yet been closed into equity is shown as 'Current period earnings' (period closing is not built yet)."
+      note="Profit that has not yet been closed into equity is shown as 'Current year earnings'; once a fiscal year is closed, its result moves to 'Retained earnings (prior fiscal years)'."
       onCsv={data && (() => downloadCsv('balance-sheet.csv', ['Section', 'Code', 'Account', 'Amount'], [
         ...data.assets.map((x: any) => ['Assets', x.code, x.name, x.amount]), ['Assets', '', 'Total assets', data.total_assets],
         ...data.liabilities.map((x: any) => ['Liabilities', x.code, x.name, x.amount]), ['Liabilities', '', 'Total liabilities', data.total_liabilities],
