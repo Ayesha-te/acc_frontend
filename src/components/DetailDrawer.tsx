@@ -25,7 +25,9 @@ function Cell({ k, v }: { k: string; v: unknown }) {
 /** Read-only view of any document returned by a register endpoint: header fields plus its line tables. */
 export function DetailDrawer({ path, id, title, onClose }: { path: string; id: number; title: string; onClose(): void }) {
   const { data, loading, error, reload } = useFetch(() => documents(path).get(id), [path, id])
-  const scalars = data ? Object.entries(data).filter(([k, v]) => !HIDE.has(k) && !Array.isArray(v)) : []
+  // A raw id next to its readable name (expense_account + expense_account_name) is noise: show only the name, labelled as the field.
+  const hasName = (k: string) => data && `${k}_name` in data
+  const scalars = data ? Object.entries(data).filter(([k, v]) => !HIDE.has(k) && !Array.isArray(v) && !hasName(k)) : []
   const tables = data ? Object.entries(data).filter(([, v]) => Array.isArray(v) && v.length) : []
   return (
     <Drawer title={title} onClose={onClose}>
@@ -37,7 +39,7 @@ export function DetailDrawer({ path, id, title, onClose }: { path: string; id: n
           {PDF_PATHS.has(path) && data.status !== undefined && <DocumentActions pdfPath={`/${path}/${id}/pdf/`} emailPath={`/${path}/${id}/email/`} defaultSubject={`${title}`} />}
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             {scalars.map(([k, v]) => (
-              <div key={k}><dt className="text-xs uppercase tracking-wide text-slate-500">{label(k)}</dt><dd className="mt-0.5 font-medium"><Cell k={k} v={v} /></dd></div>
+              <div key={k}><dt className="text-xs uppercase tracking-wide text-slate-500">{label(k.endsWith('_name') && !HIDE.has(k) && data && k.slice(0, -5) in data ? k.slice(0, -5) : k)}</dt><dd className="mt-0.5 font-medium"><Cell k={k} v={v} /></dd></div>
             ))}
           </dl>
           {path === 'expenses' && <ExpenseReceipts id={id} />}
