@@ -3,7 +3,7 @@ import { api, apiDownload, apiOpenPdf, apiUpload, Page } from './client'
 export type Org = { id: number; name: string; role: string; base_currency: string; books_locked_through: string | null; expense_approval_required?: boolean; bill_approval_required?: boolean; approval_min_amount?: string }
 export type LockChange = { id: number; at: string; old_value: string | null; new_value: string | null; source: string; reason: string; by: string | null }
 export type Party = { id: number; name: string; kind: string }
-export type Account = { id: number; code: string; name: string; type: string; system_code?: string | null; is_cash_bank: boolean; is_active?: boolean; parent?: number | null; parent_name?: string | null }
+export type Account = { id: number; code: string; name: string; type: string; system_code?: string | null; subtype?: string; is_cash_bank: boolean; is_active?: boolean; parent?: number | null; parent_name?: string | null }
 export type FiscalClose = { id: number; year_start: string; year_end: string; net_profit: string; previous_lock: string | null; closed_by_name: string | null; created_at: string; reopened_at?: string | null; reopen_reason?: string }
 
 export const auth = {

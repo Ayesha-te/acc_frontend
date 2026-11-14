@@ -97,6 +97,14 @@ export function PartiesPage() {
   )
 }
 
+const SUBTYPES: Record<string, string[]> = {
+  asset: ['Cash', 'Bank', 'Accounts receivable', 'Inventory', 'Current asset', 'Fixed asset', 'Other asset'],
+  liability: ['Accounts payable', 'Loan', 'Tax payable', 'Salaries payable', 'Current liability', 'Long-term liability'],
+  equity: ['Capital', 'Retained earnings', 'Drawings'],
+  income: ['Sales revenue', 'Service revenue', 'Interest income', 'Commission income', 'Other income'],
+  expense: ['Operating expense', 'Cost of goods sold', 'Payroll', 'Rent', 'Utilities', 'Marketing', 'Transportation', 'Maintenance', 'Office supplies'],
+}
+
 export function AccountsPage() {
   const { org } = useAuth()
   const canWrite = org?.role !== 'viewer'
@@ -109,7 +117,7 @@ export function AccountsPage() {
   const save = async (e: FormEvent) => {
     e.preventDefault()
     if (!editing) return
-    const body = { code: editing.code, name: editing.name, type: editing.type, is_cash_bank: !!editing.is_cash_bank, parent: editing.parent ?? null, ...(editing.id ? { is_active: editing.is_active !== false } : {}) }
+    const body = { code: editing.code, name: editing.name, type: editing.type, subtype: editing.subtype ?? '', is_cash_bank: !!editing.is_cash_bank, parent: editing.parent ?? null, ...(editing.id ? { is_active: editing.is_active !== false } : {}) }
     try {
       if (editing.id) await resource('accounts').update(editing.id, body)
       else await resource('accounts').create(body)
@@ -137,7 +145,7 @@ export function AccountsPage() {
                     <td className="w-24 px-4 py-2 text-slate-500">{a.code}</td>
                     <td className="px-4 py-2" style={{ paddingLeft: 16 + depth * 20 }}>{depth > 0 && <span className="mr-1 text-slate-300">└</span>}{a.name}{a.is_active === false && ' (inactive)'}</td>
                     <td className="px-4 py-2 text-right">{a.is_cash_bank && <Badge value="cash / bank" tone="loaded" />}</td>
-                    <td className="w-20 px-4 py-2 text-right">{canWrite && !a.system_code && <button className="text-xs text-brand-700 underline" onClick={() => { setFormError(null); setEditing(a) }}>Edit</button>}</td>
+                    <td className="w-20 px-4 py-2 text-right">{canWrite && <button className="text-xs text-brand-700 underline" onClick={() => { setFormError(null); setEditing(a) }}>Edit</button>}</td>
                   </tr>
                 ))}
               </tbody></table>
@@ -154,9 +162,13 @@ export function AccountsPage() {
               <div className="col-span-2"><Label text="Name"><Input value={editing.name ?? ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required /></Label></div>
             </div>
             <Label text="Type">
-              <Select value={editing.type} onChange={(e) => setEditing({ ...editing, type: e.target.value, parent: null })}>
+              <Select disabled={!!editing.system_code} value={editing.type} onChange={(e) => setEditing({ ...editing, type: e.target.value, parent: null })}>
                 {groups.map((g) => <option key={g} value={g}>{g[0].toUpperCase() + g.slice(1)}</option>)}
               </Select>
+            </Label>
+            <Label text="Subtype" hint="Optional, e.g. Current asset, Operating expense, Service revenue.">
+              <Input list="acct-subtypes" value={editing.subtype ?? ''} onChange={(e) => setEditing({ ...editing, subtype: e.target.value })} maxLength={60} />
+              <datalist id="acct-subtypes">{(SUBTYPES[editing.type ?? 'expense'] ?? []).map((t) => <option key={t} value={t} />)}</datalist>
             </Label>
             <Label text="Parent account" hint="Optional. Makes this a sub-account of an account of the same type.">
               <Select value={editing.parent ?? ''} onChange={(e) => setEditing({ ...editing, parent: e.target.value ? Number(e.target.value) : null })}>
@@ -165,7 +177,7 @@ export function AccountsPage() {
               </Select>
             </Label>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!editing.is_cash_bank} onChange={(e) => setEditing({ ...editing, is_cash_bank: e.target.checked })} /> Cash or bank account</label>
-            {editing.id && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editing.is_active !== false} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} /> Active</label>}
+            {editing.id && !editing.system_code && <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={editing.is_active !== false} onChange={(e) => setEditing({ ...editing, is_active: e.target.checked })} /> Active</label>}
             <div className="flex justify-end gap-2"><Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button><Button>{editing.id ? 'Save' : 'Add'}</Button></div>
           </form>
         </Modal>
