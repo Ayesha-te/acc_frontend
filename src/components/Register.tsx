@@ -4,7 +4,8 @@ import { documents } from '../api/endpoints'
 import { useDebounced } from '../lib/useDebounced'
 import { useToast } from '../lib/toast'
 import { DetailDrawer } from './DetailDrawer'
-import { Badge, Button, Card, EmptyState, ErrorBox, Input, PageHeader, Spinner } from './ui'
+import { Icon } from './icons'
+import { Badge, Button, Card, DateRange, EmptyState, ErrorBox, PageHeader, Pagination, SearchInput, Spinner } from './ui'
 
 export type Column = { key: string; label: string; align?: 'right'; render?: (row: any) => ReactNode }
 
@@ -76,59 +77,50 @@ function RegisterView({ title, subtitle, path, columns, createTo, createLabel = 
   return (
     <div>
       <PageHeader title={title} subtitle={subtitle}
-        actions={createTo && canWrite && <Link to={createTo}><Button>+ {createLabel}</Button></Link>} />
-      <Card className="mb-4 flex flex-wrap items-end gap-3">
-        <div className="min-w-[14rem] flex-1">
-          <Input placeholder="Search by number, name or note…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search" />
+        actions={createTo && canWrite && <Link to={createTo}><Button><Icon name="plus" size={16} strokeWidth={2.4} />{createLabel}</Button></Link>} />
+      <Card className="!rounded-3xl !p-0">
+        <div className="flex flex-wrap items-center gap-2 px-4 pb-4 pt-5 sm:px-5">
+          <SearchInput className="min-w-[14rem] flex-1" placeholder="Search by number, name or note…" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search" />
+          {!noDates && <DateRange from={from} to={to} onChange={(f, t) => { setFrom(f); setTo(t) }} />}
+          {filtered && <Button variant="subtle" onClick={clear}><Icon name="x" size={15} />Clear filters</Button>}
         </div>
-        {!noDates && (
-          <>
-            <label className="text-xs text-slate-500">From<Input type="date" className="mt-0.5 w-40" value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" /></label>
-            <label className="text-xs text-slate-500">To<Input type="date" className="mt-0.5 w-40" value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" /></label>
-          </>
-        )}
-        {filtered && <Button variant="subtle" onClick={clear}>Clear filters</Button>}
-      </Card>
-      <ErrorBox error={error} />
-      <Card className="overflow-x-auto p-0">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-            <tr>
-              {columns.map((c) => <th key={c.key} className={`px-4 py-3 font-medium ${c.align === 'right' ? 'text-right' : ''}`}>{c.label}</th>)}
-              <th className="w-20" />
-            </tr>
-          </thead>
-          <tbody className={loading && rows.length ? 'opacity-50' : ''}>
-            {rows.map((r) => (
-              <tr key={r.id} onClick={() => setOpen(r)} className="cursor-pointer border-t border-slate-100 hover:bg-indigo-50/40">
-                {columns.map((c) => (
-                  <td key={c.key} className={`px-4 py-3 ${c.align === 'right' ? 'text-right tabular-nums' : ''}`}>
-                    {c.render ? c.render(r) : c.key === 'status' ? <Badge value={r.status} /> : r[c.key]}
-                  </td>
-                ))}
-                <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                  {canWrite && r.status === 'posted' && <Button variant="subtle" onClick={() => voidRow(r)}>Void</Button>}
-                </td>
+        <ErrorBox error={error} />
+        <div className="overflow-x-auto px-2 sm:px-3">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-left text-[13px] text-slate-700 [&>th:first-child]:rounded-l-xl [&>th:last-child]:rounded-r-xl">
+                {columns.map((c) => <th key={c.key} className={`whitespace-nowrap px-4 py-3 font-semibold ${c.align === 'right' ? 'text-right' : ''}`}>{c.label}</th>)}
+                <th className="w-20" />
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {loading && !rows.length && <Spinner />}
-        {!loading && !rows.length && (
-          filtered
-            ? <EmptyState title="No records match your filters" text="Try a different search or date range." action={<Button variant="ghost" onClick={clear}>Clear filters</Button>} />
-            : <EmptyState title={`No ${title.toLowerCase()} yet`} text="Records you create will appear here."
-                action={createTo && canWrite ? <Link to={createTo}><Button>+ {createLabel}</Button></Link> : undefined} />
-        )}
-      </Card>
-      <div className="mt-3 flex items-center justify-between text-sm text-slate-600">
-        <span>{count} record{count === 1 ? '' : 's'}</span>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</Button>
-          <span>Page {page} of {pages}</span>
-          <Button variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>Next</Button>
+            </thead>
+            <tbody className={loading && rows.length ? 'opacity-50 transition-opacity' : ''}>
+              {rows.map((r) => (
+                <tr key={r.id} onClick={() => setOpen(r)} className="cursor-pointer border-b border-slate-100 transition hover:bg-indigo-50/50">
+                  {columns.map((c) => (
+                    <td key={c.key} className={`px-4 py-3 ${c.align === 'right' ? 'whitespace-nowrap text-right tabular-nums' : ''} ${c.key === 'number' ? 'whitespace-nowrap font-bold text-indigo-800' : 'text-slate-700'}`}>
+                      {c.render ? c.render(r) : c.key === 'status' ? <Badge value={r.status} icon /> : r[c.key]}
+                    </td>
+                  ))}
+                  <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                    {canWrite && r.status === 'posted' && <Button variant="subtle" className="!px-2.5 !py-1" onClick={() => voidRow(r)}>Void</Button>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {loading && !rows.length && <Spinner />}
+          {!loading && !rows.length && (
+            filtered
+              ? <EmptyState title="No records match your filters" text="Try a different search or date range." action={<Button variant="ghost" onClick={clear}>Clear filters</Button>} />
+              : <EmptyState title={`No ${title.toLowerCase()} yet`} text="Records you create will appear here."
+                  action={createTo && canWrite ? <Link to={createTo}><Button><Icon name="plus" size={16} />{createLabel}</Button></Link> : undefined} />
+          )}
         </div>
-      </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 text-sm text-slate-600 sm:px-5">
+          <span>{count ? `Showing ${(page - 1) * PAGE_SIZE + 1} – ${Math.min(page * PAGE_SIZE, count)} of ${count} record${count === 1 ? '' : 's'}` : '0 records'}</span>
+          {pages > 1 && <Pagination page={page} pages={pages} onPage={setPage} />}
+        </div>
+      </Card>
       {open && <DetailDrawer path={path} id={open.id} title={open.number ?? `#${open.id}`} onClose={() => setOpen(null)} />}
     </div>
   )

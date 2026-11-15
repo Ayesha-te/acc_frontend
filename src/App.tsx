@@ -9,6 +9,7 @@ import { LoadForm, LoadsPage, VehiclesPage } from './features/dispatch/DispatchP
 import { ItemsPage, ProductionForm, StockPage } from './features/inventory/InventoryPages'
 import { AgingPage, BalanceSheetPage, ProfitLossPage, SalesSummaryPage, TrialBalancePage, VatReturnPage, VatSummaryPage, VendorReportPage } from './features/reports/ReportPages'
 import { InvoiceForm } from './features/sales/DocumentForm'
+import { SalesInvoicesPage } from './features/sales/SalesInvoicesPage'
 import { AccountsPage, ApprovalSettingsPage, BranchesPage, OrganizationsPage, PartiesPage, PeriodLockPage, TaxRatesPage } from './features/setup/SetupPages'
 import { CashForm } from './features/treasury/CashForm'
 import { VoucherForm } from './features/vouchers/VoucherForm'
@@ -57,7 +58,7 @@ export default function App() {
         {!org ? <Route path="*" element={<Navigate to="/organizations" replace />} /> : (
           <>
             <Route index element={<Dashboard key={k} />} />
-            <Route path="sales" element={<Register key={k} title="Sales invoices" subtitle="Bills you have sent to customers" path="sales/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/sales/new" createLabel="New invoice" canWrite={w} />} />
+            <Route path="sales" element={<SalesInvoicesPage key={k} />} />
             <Route path="sales/new" element={<InvoiceForm path="sales/invoices" partyKind="customer" kind="invoice" backTo="/sales" title="New sales invoice" />} />
             <Route path="sales/returns" element={<Register key={k} title="Sales returns" subtitle="Goods or amounts customers sent back" path="sales/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/sales/returns/new" createLabel="New return" canWrite={w} />} />
             <Route path="sales/returns/new" element={<InvoiceForm path="sales/invoices" partyKind="customer" kind="return" backTo="/sales/returns" title="New sales return" />} />

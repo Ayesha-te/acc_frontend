@@ -1,5 +1,99 @@
 @import "tailwindcss";
 
+/*
+ * Design system: violet/indigo brand on a lavender-white workspace.
+ * The existing pages use Tailwind's `indigo-*` classes for every brand accent, so remapping that scale to the
+ * approved violet here restyles all modules consistently without touching their markup or logic.
+ */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-indigo-50: #f5f3ff;
+  --color-indigo-100: #ede9fe;
+  --color-indigo-200: #ddd6fe;
+  --color-indigo-300: #c4b5fd;
+  --color-indigo-400: #a78bfa;
+  --color-indigo-500: #8b5cf6;
+  --color-indigo-600: #7c3aed;
+  --color-indigo-700: #6d28d9;
+  --color-indigo-800: #5b21b6;
+  --color-indigo-900: #4c1d95;
+  --color-indigo-950: #2e1065;
+
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-200: #ddd6fe;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #4c1d95;
+
+  /* Workspace neutrals: slate with a faint violet cast. */
+  --color-slate-50: #f8f7fd;
+  --color-slate-100: #f1effa;
+  --color-slate-200: #e6e3f3;
+  --color-slate-300: #d3cfe6;
+
+  --shadow-card: 0 1px 2px rgb(76 29 149 / 0.04), 0 8px 24px -12px rgb(76 29 149 / 0.14);
+  --shadow-float: 0 12px 40px -12px rgb(76 29 149 / 0.30);
+
+  --animate-fade-in: fade-in 160ms ease-out;
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    background-color: #f7f5fe;
+    background-image:
+      radial-gradient(60rem 30rem at 85% -10%, rgb(196 181 253 / 0.30), transparent 60%),
+      radial-gradient(40rem 24rem at 30% 110%, rgb(221 214 254 / 0.35), transparent 60%);
+    background-attachment: fixed;
+    color: #1e1b3a;
+  }
+  ::selection { background: rgb(167 139 250 / 0.35); }
+  /* Thin, unobtrusive scrollbars (sidebar, tables). */
+  * { scrollbar-width: thin; scrollbar-color: rgb(167 139 250 / 0.45) transparent; }
+}
+
+/* Dark sidebar: deep violet gradient with a soft glow decoration at the bottom. */
+.app-sidebar {
+  background:
+    radial-gradient(28rem 20rem at 120% 105%, rgb(139 92 246 / 0.35), transparent 60%),
+    radial-gradient(18rem 14rem at -20% 40%, rgb(99 102 241 / 0.12), transparent 60%),
+    linear-gradient(180deg, #2a1065 0%, #241052 45%, #1c0d43 100%);
+}
+
+/* Hero card gradients used by the KPI bento cards. */
+@utility bg-hero-violet { background: linear-gradient(135deg, #fdf2ff 0%, #f3e8ff 45%, #e9e2ff 100%); }
+@utility bg-hero-cta { background: linear-gradient(160deg, #ede9fe 0%, #e4dcff 55%, #d9ccff 100%); }
+@utility bg-tint-green { background: linear-gradient(135deg, #f0fdf6 0%, #e7f9ef 100%); }
+@utility bg-tint-amber { background: linear-gradient(135deg, #fff9f0 0%, #fff1e2 100%); }
+@utility bg-tint-rose { background: linear-gradient(135deg, #fff5f6 0%, #ffe9ec 100%); }
+@utility bg-tint-violet { background: linear-gradient(135deg, #f8f6ff 0%, #efeaff 100%); }
+@utility bg-btn-violet { background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); }
+
+/*
+ * Unified table headers. Unlayered on purpose: it wins over the `uppercase tracking-wide text-xs` utilities that
+ * individual pages put on their <thead>, so every module's tables match the invoice table without editing them.
+ */
+main thead th,
+[role=dialog] thead th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #3f3b5c;
+}
+main table td,
+[role=dialog] table td { border-color: #f1effa; }
+
 @media print {
   aside, header, .no-print { display: none !important; }
   main { padding: 0 !important; }
