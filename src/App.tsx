@@ -3,7 +3,10 @@ import { expenses } from './api/endpoints'
 import { Layout } from './components/Layout'
 import { Column, Register } from './components/Register'
 import { Dashboard } from './features/dashboard/Dashboard'
-import { useAuth } from './features/auth/AuthContext'
+import { useAuth, useCan } from './features/auth/AuthContext'
+import { AcceptInvitePage } from './features/users/AcceptInvitePage'
+import { UsersPage } from './features/users/UsersPage'
+import { voucherCreateAction } from './features/vouchers/permissions'
 import { LoginPage } from './features/auth/LoginPage'
 import { LoadForm, LoadsPage, VehiclesPage } from './features/dispatch/DispatchPages'
 import { ItemsPage, ProductionForm, StockPage } from './features/inventory/InventoryPages'
@@ -46,9 +49,13 @@ const productionCols: Column[] = [
 
 export default function App() {
   const { authed, ready, org } = useAuth()
+  const can = useCan() // before any early return (hook order must not change between renders)
+  // Public: invitation links work whether or not someone is signed in on this browser.
+  if (window.location.pathname === '/accept-invite') return <AcceptInvitePage />
   if (!authed) return <LoginPage />
   if (!ready) return <div className="p-8 text-slate-500">Loading…</div>
-  const w = !!org && org.role !== 'viewer'
+  /** canWrite / canVoid props for a register of one permission module */
+  const p = (m: string, createAction = 'create') => ({ canWrite: can(m, createAction), canVoid: can(m, 'void') })
   // Keyed by organization so no page keeps data from another organization after a switch.
   const k = org?.id
   return (
@@ -60,15 +67,15 @@ export default function App() {
             <Route index element={<Dashboard key={k} />} />
             <Route path="sales" element={<SalesInvoicesPage key={k} />} />
             <Route path="sales/new" element={<InvoiceForm path="sales/invoices" partyKind="customer" kind="invoice" backTo="/sales" title="New sales invoice" />} />
-            <Route path="sales/returns" element={<Register key={k} title="Sales returns" subtitle="Goods or amounts customers sent back" path="sales/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/sales/returns/new" createLabel="New return" canWrite={w} />} />
+            <Route path="sales/returns" element={<Register key={k} title="Sales returns" subtitle="Goods or amounts customers sent back" path="sales/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/sales/returns/new" createLabel="New return" {...p('sales_returns')} />} />
             <Route path="sales/returns/new" element={<InvoiceForm path="sales/invoices" partyKind="customer" kind="return" backTo="/sales/returns" title="New sales return" />} />
-            <Route path="purchases" element={<Register key={k} title="Purchase invoices" subtitle="Bills received from suppliers" path="purchases/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/purchases/new" createLabel="New invoice" canWrite={w} />} />
+            <Route path="purchases" element={<Register key={k} title="Purchase invoices" subtitle="Bills received from suppliers" path="purchases/invoices" columns={invoiceCols} extraQuery={{ kind: 'invoice' }} createTo="/purchases/new" createLabel="New invoice" {...p('purchase_invoices')} />} />
             <Route path="purchases/new" element={<InvoiceForm path="purchases/invoices" partyKind="supplier" kind="invoice" backTo="/purchases" title="New purchase invoice" />} />
-            <Route path="purchases/returns" element={<Register key={k} title="Purchase returns" subtitle="Goods or amounts you sent back to suppliers" path="purchases/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/purchases/returns/new" createLabel="New return" canWrite={w} />} />
+            <Route path="purchases/returns" element={<Register key={k} title="Purchase returns" subtitle="Goods or amounts you sent back to suppliers" path="purchases/invoices" columns={returnCols} extraQuery={{ kind: 'return' }} createTo="/purchases/returns/new" createLabel="New return" {...p('purchase_returns')} />} />
             <Route path="purchases/returns/new" element={<InvoiceForm path="purchases/invoices" partyKind="supplier" kind="return" backTo="/purchases/returns" title="New purchase return" />} />
-            <Route path="receipts" element={<Register key={k} title="Receipts" subtitle="Money received from customers" path="receipts" columns={cashCols} createTo="/receipts/new" createLabel="Receive money" canWrite={w} />} />
+            <Route path="receipts" element={<Register key={k} title="Receipts" subtitle="Money received from customers" path="receipts" columns={cashCols} createTo="/receipts/new" createLabel="Receive money" {...p('receipts')} />} />
             <Route path="receipts/new" element={<CashForm path="receipts" partyKind="customer" title="Receive money from a customer" />} />
-            <Route path="payments" element={<Register key={k} title="Payments" subtitle="Money paid to suppliers" path="payments" columns={cashCols} createTo="/payments/new" createLabel="Pay a supplier" canWrite={w} />} />
+            <Route path="payments" element={<Register key={k} title="Payments" subtitle="Money paid to suppliers" path="payments" columns={cashCols} createTo="/payments/new" createLabel="Pay a supplier" {...p('payments')} />} />
             <Route path="payments/new" element={<CashForm path="payments" partyKind="supplier" title="Pay a supplier" />} />
             <Route path="sales/quotes" element={<OrdersPage key={k} kind="quote" />} />
             <Route path="sales/quotes/new" element={<OrderForm key={k} kind="quote" />} />
@@ -88,12 +95,12 @@ export default function App() {
             <Route path="banking" element={<BankStatementsPage key={k} />} />
             <Route path="banking/rules" element={<BankRulesPage key={k} />} />
             <Route path="banking/:id" element={<BankStatementPage key={k} />} />
-            <Route path="expenses" element={<Register key={k} title="Expenses" subtitle="Money spent without a supplier bill" path="expenses" columns={expenseCols} createTo="/expenses/new" createLabel="New expense" canWrite={w} />} />
+            <Route path="expenses" element={<Register key={k} title="Expenses" subtitle="Money spent without a supplier bill" path="expenses" columns={expenseCols} createTo="/expenses/new" createLabel="New expense" {...p('expenses')} />} />
             <Route path="expenses/new" element={<ExpenseForm key={k} />} />
             {(['journal', 'general', 'contra', 'opening'] as const).map((t) => [
               <Route key={t} path={`vouchers/${t}`} element={<Register key={`${k}${t}`} title={`${t[0].toUpperCase()}${t.slice(1)} vouchers`}
                 subtitle={{ journal: 'Standard accounting adjustments and journal entries', general: 'General transactions with no dedicated screen', contra: 'Transfers between cash and bank accounts', opening: 'Balances brought forward when you started using the system' }[t]}
-                path="vouchers" columns={voucherCols} extraQuery={{ type: t }} createTo={`/vouchers/${t}/new`} createLabel="New voucher" canWrite={w} />} />,
+                path="vouchers" columns={voucherCols} extraQuery={{ type: t }} createTo={`/vouchers/${t}/new`} createLabel="New voucher" {...p('ledger', voucherCreateAction(t))} />} />,
               <Route key={`${t}-new`} path={`vouchers/${t}/new`} element={<VoucherForm type={t} />} />,
             ])}
             <Route path="reports/profit-loss" element={<ProfitLossPage key={k} />} />
@@ -107,7 +114,7 @@ export default function App() {
             <Route path="inventory/valuation" element={<ValuationPage key={k} />} />
             <Route path="inventory/items" element={<ItemsPage key={k} />} />
             <Route path="inventory/stock" element={<StockPage key={k} />} />
-            <Route path="inventory/production" element={<Register key={k} title="Production" subtitle="Raw materials consumed to make finished goods" path="inventory/production" columns={productionCols} createTo="/inventory/production/new" createLabel="New production run" canWrite={w} />} />
+            <Route path="inventory/production" element={<Register key={k} title="Production" subtitle="Raw materials consumed to make finished goods" path="inventory/production" columns={productionCols} createTo="/inventory/production/new" createLabel="New production run" {...p('inventory')} />} />
             <Route path="inventory/production/new" element={<ProductionForm key={k} />} />
             <Route path="dispatch/vehicles" element={<VehiclesPage key={k} />} />
             <Route path="dispatch/loads" element={<LoadsPage key={k} />} />
@@ -117,6 +124,7 @@ export default function App() {
             <Route path="settings/tax-rates" element={<TaxRatesPage key={k} />} />
             <Route path="settings/branches" element={<BranchesPage key={k} />} />
             <Route path="settings/approvals" element={<ApprovalSettingsPage key={k} />} />
+            <Route path="settings/users" element={<UsersPage key={k} />} />
             <Route path="settings/period-lock" element={<PeriodLockPage key={k} />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </>

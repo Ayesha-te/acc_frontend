@@ -6,7 +6,7 @@ import { todayDubai } from '../../lib/format'
 import { useToast } from '../../lib/toast'
 import { useFetch } from '../../lib/useFetch'
 import { useSubmit } from '../../lib/useSubmit'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 const items = resource<Item>('inventory/items')
 const locations = resource<Location>('inventory/locations')
@@ -15,7 +15,7 @@ const qty = (v: string | number) => Number(v).toLocaleString(undefined, { maximu
 
 export function ItemsPage() {
   const { org } = useAuth()
-  const canWrite = org?.role !== 'viewer'
+  const canWrite = useCan()('inventory', 'create')
   const toast = useToast()
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ sku: '', name: '', kind: 'raw_material', unit: 'kg' })
@@ -82,7 +82,7 @@ export function ItemsPage() {
 
 export function StockPage() {
   const { org } = useAuth()
-  const canWrite = org?.role !== 'viewer'
+  const canWrite = useCan()('inventory', 'create')
   const toast = useToast()
   const [search, setSearch] = useState('')
   const [kind, setKind] = useState('')

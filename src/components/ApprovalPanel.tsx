@@ -1,12 +1,11 @@
 import { useState } from 'react'
 import { approvals } from '../api/endpoints'
-import { useAuth } from '../features/auth/AuthContext'
+import { useCan } from '../features/auth/AuthContext'
 import { useToast } from '../lib/toast'
 import { Button, ErrorBox, Input } from './ui'
 
 /** Approve / reject a document waiting for approval. Only owners and admins see the buttons; the server decides regardless. */
 export function ApprovalPanel({ path, id, status, reason, onChanged }: { path: string; id: number; status: string; reason?: string; onChanged(): void }) {
-  const { org } = useAuth()
   const toast = useToast()
   const [rejecting, setRejecting] = useState(false)
   const [why, setWhy] = useState('')
@@ -14,7 +13,7 @@ export function ApprovalPanel({ path, id, status, reason, onChanged }: { path: s
   const [error, setError] = useState<string | null>(null)
   if (status === 'rejected') return <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">Rejected{reason ? `: ${reason}` : ''}. Nothing was posted.</p>
   if (status !== 'pending') return null
-  const canDecide = org?.role === 'owner' || org?.role === 'admin'
+  const canDecide = useCan()(path === 'expenses' ? 'expenses' : 'purchase_invoices', 'post')
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true); setError(null)
     try { await fn(); toast.success(ok); onChanged() } catch (e: any) { setError(e.message) } finally { setBusy(false) }

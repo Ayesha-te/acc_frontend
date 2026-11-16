@@ -5,7 +5,7 @@ import { Badge, Button, Card, EmptyState, ErrorBox, Input, Label, PageHeader, Sp
 import { money, todayDubai } from '../../lib/format'
 import { useFetch } from '../../lib/useFetch'
 import { useToast } from '../../lib/toast'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 type Status = { enabled: boolean; since: string | null }
 type Row = { item: number; sku: string; name: string; quantity: string; value: string; average_cost: string; quantity_difference: string }
@@ -15,7 +15,7 @@ type Report = { items: Row[]; total_value: string; ledger_balance: string; diffe
 export function ValuationPage() {
   const { org } = useAuth()
   const toast = useToast()
-  const isAdmin = org?.role === 'owner' || org?.role === 'admin'
+  const isAdmin = useCan()('inventory', 'manage')
   const status = useFetch(() => api<Status>('/inventory/costing/'), [org?.id])
   const report = useFetch(() => (status.data?.enabled ? api<Report>('/inventory/costing/valuation/') : Promise.resolve(null)), [org?.id, status.data?.enabled])
   const stock = useFetch(() => documents('inventory/stock').list({ page_size: 200 }), [org?.id])

@@ -8,7 +8,7 @@ import { useDebounced } from '../../lib/useDebounced'
 import { useToast } from '../../lib/toast'
 import { isReopening } from '../../lib/receiptFiles'
 import { useFetch } from '../../lib/useFetch'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 const kindLabel: Record<string, string> = { customer: 'Customer', supplier: 'Supplier', both: 'Customer & supplier' }
 
@@ -33,7 +33,7 @@ function StatementModal({ party, onClose }: { party: any; onClose(): void }) {
 
 export function PartiesPage() {
   const { org } = useAuth()
-  const canWrite = org?.role !== 'viewer'
+  const canWrite = useCan()('contacts', 'create')
   const toast = useToast()
   const [adding, setAdding] = useState(false)
   const [statementFor, setStatementFor] = useState<any>(null)
@@ -105,9 +105,41 @@ const SUBTYPES: Record<string, string[]> = {
   expense: ['Operating expense', 'Cost of goods sold', 'Payroll', 'Rent', 'Utilities', 'Marketing', 'Transportation', 'Maintenance', 'Office supplies'],
 }
 
+/** Organization setting: the income account new sales invoice lines start with (empty = built-in Sales Revenue). */
+function DefaultIncomeCard({ accounts: list }: { accounts: Account[] }) {
+  const { org, refreshOrgs } = useAuth()
+  const toast = useToast()
+  const eligible = list.filter((a) => a.type === 'income' && a.is_active !== false && a.system_code !== 'SALES_RETURNS')
+  const [value, setValue] = useState(org?.default_income_account ? String(org.default_income_account) : '')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const builtIn = list.find((a) => a.system_code === 'SALES')
+  const save = async () => {
+    if (!org) return
+    setBusy(true); setError(null)
+    try { await orgs.setDefaultIncome(org.id, value ? Number(value) : null); await refreshOrgs(); toast.success('Default income account saved') }
+    catch (e: any) { setError(e.message) } finally { setBusy(false) }
+  }
+  return (
+    <Card className="mb-4 flex flex-wrap items-end gap-3">
+      <div className="min-w-[16rem] flex-1">
+        <Label text="Default income account for new sales invoice lines" hint="Lines start with this account; users can choose a different income account on each line.">
+          <Select value={value} onChange={(e) => setValue(e.target.value)} aria-label="Default income account">
+            <option value="">{builtIn ? `${builtIn.code} · ${builtIn.name} (built-in default)` : 'Built-in Sales Revenue'}</option>
+            {eligible.filter((a) => a.system_code !== 'SALES').map((a) => <option key={a.id} value={a.id}>{a.code} · {a.name}</option>)}
+          </Select>
+        </Label>
+        <ErrorBox error={error} />
+      </div>
+      <Button onClick={save} disabled={busy || value === (org?.default_income_account ? String(org.default_income_account) : '')}>{busy ? 'Saving…' : 'Save default'}</Button>
+    </Card>
+  )
+}
+
 export function AccountsPage() {
   const { org } = useAuth()
-  const canWrite = org?.role !== 'viewer'
+  const can = useCan()
+  const canWrite = can('chart_of_accounts', 'create')
   const toast = useToast()
   const [version, setVersion] = useState(0)
   const { data, loading, error } = useFetch(() => accounts.list(), [org?.id, version])
@@ -131,6 +163,7 @@ export function AccountsPage() {
       <PageHeader title="Chart of accounts" subtitle="Every account your transactions post to. Sub-accounts roll up into their parent."
         actions={canWrite && <Button onClick={() => { setFormError(null); setEditing({ type: 'expense', is_cash_bank: false, parent: null }) }}>+ New account</Button>} />
       <ErrorBox error={error} />
+      {data && can('settings', 'manage') && <DefaultIncomeCard accounts={data} />}
       {loading && !data && <Spinner />}
       {data && !data.length && <EmptyState title="No accounts yet" text="Accounts are created with the organization." />}
       <div className="space-y-4">
@@ -221,7 +254,7 @@ export function OrganizationsPage() {
 
 export function TaxRatesPage() {
   const { org } = useAuth()
-  const canWrite = org?.role === 'owner' || org?.role === 'admin' || org?.role === 'accountant'
+  const canWrite = useCan()('settings', 'create')
   const toast = useToast()
   const rates = resource<TaxRate>('tax-rates')
   const { data, loading, error: loadError, reload } = useFetch(() => rates.list(), [org?.id])
@@ -273,7 +306,7 @@ export function TaxRatesPage() {
 
 export function BranchesPage() {
   const { org } = useAuth()
-  const canWrite = org?.role === 'owner' || org?.role === 'admin'
+  const canWrite = useCan()('settings', 'manage')
   const toast = useToast()
   const branches = resource<any>('branches')
   const { data, loading, error: loadError, reload } = useFetch(() => branches.list(), [org?.id])
@@ -357,7 +390,7 @@ function BranchAccessCard({ branches }: { branches: { id: number; name: string }
 
 export function PeriodLockPage() {
   const { org, refreshOrgs } = useAuth()
-  const canWrite = org?.role === 'owner' || org?.role === 'admin'
+  const canWrite = useCan()('settings', 'manage')
   const toast = useToast()
   const current = org?.books_locked_through ?? null
   const [date, setDate] = useState(current ?? '')
@@ -475,7 +508,7 @@ function LockHistoryCard() {
 export function ApprovalSettingsPage() {
   const { org, refreshOrgs } = useAuth()
   const toast = useToast()
-  const canWrite = org?.role === 'owner' || org?.role === 'admin'
+  const canWrite = useCan()('settings', 'manage')
   const [exp, setExp] = useState(!!org?.expense_approval_required)
   const [bill, setBill] = useState(!!org?.bill_approval_required)
   const [min, setMin] = useState(org?.approval_min_amount ?? '0')

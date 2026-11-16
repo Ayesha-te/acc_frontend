@@ -10,7 +10,7 @@ import { money, todayDubai } from '../../lib/format'
 import { useFetch } from '../../lib/useFetch'
 import { useSubmit } from '../../lib/useSubmit'
 import { useToast } from '../../lib/toast'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 export type OrderKind = 'quote' | 'order' | 'purchase'
 const META = {
@@ -28,7 +28,7 @@ export function OrdersPage({ kind }: { kind: OrderKind }) {
   const m = META[kind]
   const { org } = useAuth()
   const toast = useToast()
-  const canWrite = !!org && org.role !== 'viewer'
+  const canWrite = useCan()(({ quote: 'quotes', order: 'sales_orders', purchase: 'purchase_orders' } as Record<string, string>)[kind], 'create')
   const [status, setStatus] = useState('')
   const [search, setSearch] = useState('')
   const list = useFetch(() => orders(kind).page({ page_size: 50, search, status, ...(kind === 'purchase' ? {} : { kind }) }), [org?.id, kind, status, search])

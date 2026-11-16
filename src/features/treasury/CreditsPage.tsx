@@ -4,7 +4,7 @@ import { Badge, Button, Card, EmptyState, ErrorBox, Input, Label, PageHeader, Sp
 import { money, todayDubai } from '../../lib/format'
 import { useFetch } from '../../lib/useFetch'
 import { useToast } from '../../lib/toast'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 type CreditInvoice = { id: number; number: string; date: string; party: number; branch: number | null; total: string; outstanding: string; credit_available: string }
 type Link = { id: number; invoice: number; number: string; amount: string; date: string }
@@ -20,7 +20,7 @@ export function CreditsPage({ side }: { side: 'sales' | 'purchases' }) {
   const toast = useToast()
   const invPath = `${side}/invoices`
   const cashPath = side === 'sales' ? 'receipts' : 'payments'
-  const canWrite = !!org && org.role !== 'viewer'
+  const canWrite = useCan()(side === 'sales' ? 'customer_credits' : 'supplier_credits', 'create')
   const list = useFetch(() => api<CreditInvoice[]>(`/${invPath}/credits/`), [org?.id, side])
   const [sel, setSel] = useState<CreditInvoice | null>(null)
   const [summary, setSummary] = useState<Summary | null>(null)

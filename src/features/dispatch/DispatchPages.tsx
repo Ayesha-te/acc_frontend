@@ -7,7 +7,7 @@ import { todayDubai } from '../../lib/format'
 import { useToast } from '../../lib/toast'
 import { useFetch } from '../../lib/useFetch'
 import { useSubmit } from '../../lib/useSubmit'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 type Vehicle = { id: number; name: string; plate_number: string; driver_name: string; is_active: boolean }
 const vehicles = resource<Vehicle>('dispatch/vehicles')
@@ -18,7 +18,7 @@ const nowLocal = () => `${todayDubai()}T${new Intl.DateTimeFormat('en-GB', { tim
 
 export function VehiclesPage() {
   const { org } = useAuth()
-  const canWrite = org?.role !== 'viewer'
+  const canWrite = useCan()('inventory', 'create')
   const toast = useToast()
   const [adding, setAdding] = useState(false)
   const [f, setF] = useState({ name: '', plate_number: '', driver_name: '' })
@@ -67,7 +67,7 @@ export function VehiclesPage() {
 
 export function LoadsPage() {
   const { org } = useAuth()
-  const canWrite = org?.role !== 'viewer'
+  const canWrite = useCan()('inventory', 'create')
   const toast = useToast()
   const nav = useNavigate()
   const [status, setStatus] = useState('')

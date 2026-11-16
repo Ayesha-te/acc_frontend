@@ -1,6 +1,8 @@
 import { api, apiDownload, apiOpenPdf, apiUpload, Page } from './client'
 
-export type Org = { id: number; name: string; role: string; base_currency: string; books_locked_through: string | null; expense_approval_required?: boolean; bill_approval_required?: boolean; approval_min_amount?: string }
+export type Org = { id: number; name: string; role: string; base_currency: string; books_locked_through: string | null; expense_approval_required?: boolean; bill_approval_required?: boolean; approval_min_amount?: string; default_income_account?: number | null; effective_income_account?: number | null; permissions?: Perms }
+/** Effective permissions in one organization: {module: [actions]} (the server enforces them; the UI only hides). */
+export type Perms = Record<string, string[]>
 export type LockChange = { id: number; at: string; old_value: string | null; new_value: string | null; source: string; reason: string; by: string | null }
 export type Party = { id: number; name: string; kind: string }
 export type Account = { id: number; code: string; name: string; type: string; system_code?: string | null; subtype?: string; is_cash_bank: boolean; is_active?: boolean; parent?: number | null; parent_name?: string | null }
@@ -19,6 +21,7 @@ export const orgs = {
   setLock: (id: number, books_locked_through: string | null, lock_change_reason?: string) => api<Org>(`/organizations/${id}/`, { method: 'PATCH', body: { books_locked_through, lock_change_reason } }),
   lockHistory: (id: number) => api<LockChange[]>(`/organizations/${id}/lock-history/`),
   reopenYear: (id: number, year_end: string, reason: string) => api<FiscalClose>(`/organizations/${id}/reopen-year/`, { method: 'POST', body: { year_end, reason } }),
+  setDefaultIncome: (id: number, default_income_account: number | null) => api<Org>(`/organizations/${id}/`, { method: 'PATCH', body: { default_income_account } }),
   setApproval: (id: number, body: { expense_approval_required: boolean; bill_approval_required: boolean; approval_min_amount: string }) => api<Org>(`/organizations/${id}/`, { method: 'PATCH', body }),
 }
 export const parties = {
@@ -107,3 +110,24 @@ export type Item = { id: number; sku: string; name: string; kind: 'raw_material'
 export type Location = { id: number; name: string; kind: string; is_active: boolean }
 
 export const bankRules = resource<BankRuleRow>('bank-rules')
+
+export type Member = { id: number; user: number; username: string; email: string; role: string; is_active: boolean; invited_by_name: string | null
+  created_at: string; is_self: boolean; custom_permissions: boolean; permissions: Perms }
+export type Invitation = { id: number; email: string; role: string; permissions: Perms | null; status: string; invited_by_name: string | null; created_at: string; expires_at: string }
+export type InviteResult = { kind: 'member'; member: Member } | { kind: 'invitation'; invitation: Invitation; invite_url: string; invite_path: string; emailed: boolean }
+export type PermCatalog = { actions: string[]; modules: { key: string; label: string; group: string; actions: string[] }[]; presets: Record<string, Perms> }
+export const team = {
+  members: () => api<Member[] | Page<Member>>('/members/', { query: { page_size: 200 } }).then((r) => (Array.isArray(r) ? r : r.results)),
+  updateMember: (id: number, body: { role?: string; is_active?: boolean; permissions?: Perms | null }) => api<Member>(`/members/${id}/`, { method: 'PATCH', body }),
+  removeMember: (id: number) => api<void>(`/members/${id}/`, { method: 'DELETE' }),
+  invitations: () => api<Invitation[]>('/invitations/'),
+  invite: (body: { email: string; role: string; permissions?: Perms | null }) => api<InviteResult>('/invitations/', { method: 'POST', body }),
+  resend: (id: number) => api<InviteResult>(`/invitations/${id}/resend/`, { method: 'POST', body: {} }),
+  cancel: (id: number) => api<Invitation>(`/invitations/${id}/cancel/`, { method: 'POST', body: {} }),
+  catalog: () => api<PermCatalog>('/permissions/catalog/'),
+}
+/** Public invitation endpoints (no login). The token travels in the request body, never in a URL. */
+export const invitations = {
+  lookup: (token: string) => api<{ organization_name: string; email: string; role: string; expires_at: string; existing_account: boolean }>('/auth/invitations/lookup/', { method: 'POST', body: { token } }),
+  accept: (body: { token: string; username: string; password: string }) => api<{ token: string; organization: number }>('/auth/invitations/accept/', { method: 'POST', body }),
+}

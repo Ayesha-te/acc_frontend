@@ -10,7 +10,7 @@ import { Badge, Drawer, ErrorBox, Spinner } from './ui'
 const PDF_PATHS = new Set(['sales/invoices', 'purchases/invoices'])
 const APPROVAL_PATHS = new Set(['expenses', 'purchases/invoices'])
 
-const HIDE = new Set(['rejection_reason', 'id', 'party', 'cash_account', 'counter_account', 'branch', 'original', 'item', 'location', 'vehicle', 'account', 'invoice'])
+const HIDE = new Set(['rejection_reason', 'id', 'party', 'cash_account', 'counter_account', 'branch', 'original', 'item', 'location', 'vehicle', 'account', 'invoice', 'income_account'])
 const isMoney = (k: string) => /(^|_)(total|subtotal|tax|net|gross|amount|allocated|unapplied|debit|credit|price|tax_total)$/.test(k)
 const label = (k: string) => k.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())
 
@@ -36,7 +36,8 @@ export function DetailDrawer({ path, id, title, onClose }: { path: string; id: n
       {data && (
         <div className="space-y-6">
           {APPROVAL_PATHS.has(path) && <ApprovalPanel path={path} id={id} status={data.status} reason={data.rejection_reason} onChanged={reload} />}
-          {PDF_PATHS.has(path) && data.status !== undefined && <DocumentActions pdfPath={`/${path}/${id}/pdf/`} emailPath={`/${path}/${id}/email/`} defaultSubject={`${title}`} />}
+          {PDF_PATHS.has(path) && data.status !== undefined && <DocumentActions pdfPath={`/${path}/${id}/pdf/`} emailPath={`/${path}/${id}/email/`} defaultSubject={`${title}`}
+            module={`${path.startsWith('sales') ? 'sales' : 'purchase'}_${data.kind === 'return' ? 'returns' : 'invoices'}`} />}
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             {scalars.map(([k, v]) => (
               <div key={k}><dt className="text-xs uppercase tracking-wide text-slate-500">{label(k.endsWith('_name') && !HIDE.has(k) && data && k.slice(0, -5) in data ? k.slice(0, -5) : k)}</dt><dd className="mt-0.5 font-medium"><Cell k={k} v={v} /></dd></div>

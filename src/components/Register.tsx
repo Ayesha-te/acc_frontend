@@ -18,6 +18,8 @@ type RegisterProps = {
   createLabel?: string
   extraQuery?: Record<string, string>
   canWrite: boolean
+  /** Defaults to canWrite. */
+  canVoid?: boolean
   /** Hide the date filters for registers that have no date. */
   noDates?: boolean
 }
@@ -33,7 +35,7 @@ export function Register(props: RegisterProps) {
   return <RegisterView key={`${props.path}?${JSON.stringify(props.extraQuery ?? {})}`} {...props} />
 }
 
-function RegisterView({ title, subtitle, path, columns, createTo, createLabel = 'New', extraQuery, canWrite, noDates }: RegisterProps) {
+function RegisterView({ title, subtitle, path, columns, createTo, createLabel = 'New', extraQuery, canWrite, canVoid = canWrite, noDates }: RegisterProps) {
   const toast = useToast()
   const [rows, setRows] = useState<any[]>([])
   const [count, setCount] = useState(0)
@@ -102,7 +104,7 @@ function RegisterView({ title, subtitle, path, columns, createTo, createLabel = 
                     </td>
                   ))}
                   <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                    {canWrite && r.status === 'posted' && <Button variant="subtle" className="!px-2.5 !py-1" onClick={() => voidRow(r)}>Void</Button>}
+                    {canVoid && r.status === 'posted' && <Button variant="subtle" className="!px-2.5 !py-1" onClick={() => voidRow(r)}>Void</Button>}
                   </td>
                 </tr>
               ))}

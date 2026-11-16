@@ -67,3 +67,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
   return <C.Provider value={value}>{children}</C.Provider>
 }
+
+/**
+ * can(module, action) for the selected organization. Mirrors the server's checks so the UI hides what the server would
+ * refuse; the server remains the authority. Falls back to the role when an older API returns no permissions.
+ */
+export function useCan() {
+  const { org } = useAuth()
+  return (module: string, action = 'view') => {
+    if (!org) return false
+    if (org.role === 'owner') return true
+    if (org.permissions) return (org.permissions[module] ?? []).includes(action)
+    return action === 'view' || org.role !== 'viewer'
+  }
+}

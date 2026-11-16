@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { documents } from '../api/endpoints'
-import { useAuth } from '../features/auth/AuthContext'
+import { useAuth, useCan } from '../features/auth/AuthContext'
 import { money, todayDubai } from '../lib/format'
 import { Icon, IconName } from './icons'
 import { Button, Modal, useDismiss } from './ui'
@@ -20,8 +20,19 @@ const nav: NavGroup[] = [
     ['/reports/aging', 'Aging', 'clock'], ['/reports/vendor', 'Vendor report', 'users'], ['/reports/sales-summary', 'Sales summary', 'barChart'], ['/reports/vat-summary', 'VAT summary', 'pieChart'], ['/reports/vat-return', 'VAT return worksheet', 'file']] },
   { group: 'Stock & production', icon: 'box', items: [['/inventory/items', 'Items', 'box'], ['/inventory/stock', 'Stock on hand', 'box'], ['/inventory/valuation', 'Valuation', 'barChart'], ['/inventory/production', 'Production', 'settings']] },
   { group: 'Van loading', icon: 'truck', items: [['/dispatch/loads', 'Van loads', 'truck'], ['/dispatch/vehicles', 'Vehicles', 'truck']] },
-  { group: 'Setup', icon: 'settings', items: [['/parties', 'Customers & suppliers', 'users'], ['/accounts', 'Chart of accounts', 'ledger'], ['/settings/tax-rates', 'Tax rates', 'pieChart'], ['/settings/branches', 'Branches', 'building'], ['/settings/period-lock', 'Period lock', 'clock'], ['/settings/approvals', 'Approvals', 'checkCircle']] },
+  { group: 'Setup', icon: 'settings', items: [['/parties', 'Customers & suppliers', 'users'], ['/accounts', 'Chart of accounts', 'ledger'], ['/settings/tax-rates', 'Tax rates', 'pieChart'], ['/settings/branches', 'Branches', 'building'], ['/settings/period-lock', 'Period lock', 'clock'], ['/settings/approvals', 'Approvals', 'checkCircle'], ['/settings/users', 'Users & permissions', 'users']] },
 ]
+
+/** Permission module each page belongs to (the server enforces the same; this only hides what would be refused). */
+const PAGE_MODULE: [string, string][] = [
+  ['/sales/quotes', 'quotes'], ['/sales/orders', 'sales_orders'], ['/sales/returns', 'sales_returns'], ['/sales', 'sales_invoices'],
+  ['/receipts', 'receipts'], ['/credits/sales', 'customer_credits'], ['/recurring-expenses', 'expenses'], ['/recurring', 'sales_invoices'],
+  ['/purchases/orders', 'purchase_orders'], ['/purchases/returns', 'purchase_returns'], ['/purchases', 'purchase_invoices'],
+  ['/payments', 'payments'], ['/credits/purchases', 'supplier_credits'], ['/expenses', 'expenses'], ['/vouchers', 'ledger'],
+  ['/banking', 'banking'], ['/reports', 'reports'], ['/inventory', 'inventory'], ['/dispatch', 'inventory'], ['/parties', 'contacts'],
+  ['/accounts', 'chart_of_accounts'], ['/settings/users', 'users'], ['/settings', 'settings'], ['/', 'dashboard'],
+]
+export const moduleOf = (path: string) => (PAGE_MODULE.find(([p]) => (p === '/' ? path === '/' : path === p || path.startsWith(p + '/'))) ?? [, 'dashboard'])[1] as string
 
 const quick: [string, string][] = [
   ['/sales/new', 'Sales invoice'], ['/purchases/new', 'Purchase invoice'], ['/receipts/new', 'Receive money'],
@@ -44,6 +55,8 @@ const store = {
 }
 
 function QuickCreate() {
+  const can = useCan()
+  const items = quick.filter(([to]) => can(moduleOf(to), 'create'))
   const [open, setOpen] = useState(false)
   const close = useCallback(() => setOpen(false), [])
   const ref = useDismiss(open, close)
@@ -54,7 +67,7 @@ function QuickCreate() {
       <Button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}><Icon name="plus" size={16} strokeWidth={2.4} /><span className="hidden sm:inline">New</span></Button>
       {open && (
         <div role="menu" className="absolute right-0 z-30 mt-2 w-56 animate-fade-in rounded-2xl border border-slate-200 bg-white p-1.5 shadow-float">
-          {quick.map(([to, label]) => (
+          {items.map(([to, label]) => (
             <Link key={to} to={to} role="menuitem" className="block rounded-xl px-3 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700">{label}</Link>
           ))}
         </div>
@@ -68,10 +81,11 @@ function CommandPalette({ groups, canWrite, onClose }: { groups: NavGroup[]; can
   const [q, setQ] = useState('')
   const [i, setI] = useState(0)
   const navigate = useNavigate()
+  const can = useCan()
   const all = useMemo(() => [
     ...groups.flatMap((g) => g.items.map(([to, label, icon]) => ({ to, label, hint: g.group || 'Home', icon }))),
-    ...(canWrite ? quick.map(([to, label]) => ({ to, label: `New ${label.toLowerCase()}`, hint: 'Create', icon: 'plus' as IconName })) : []),
-  ], [groups, canWrite])
+    ...(canWrite ? quick.filter(([to]) => can(moduleOf(to), 'create')).map(([to, label]) => ({ to, label: `New ${label.toLowerCase()}`, hint: 'Create', icon: 'plus' as IconName })) : []),
+  ], [groups, canWrite, can])
   const hits = all.filter((x) => `${x.label} ${x.hint}`.toLowerCase().includes(q.trim().toLowerCase())).slice(0, 10)
   useEffect(() => setI(0), [q])
   const go = (to: string) => { onClose(); navigate(to) }
@@ -261,8 +275,13 @@ export function Layout() {
   const [collapsed, setCollapsed] = useState(() => store.get('nav.collapsed') === '1')
   const [palette, setPalette] = useState(false)
   const [shortcuts, setShortcuts] = useState(false)
-  const canWrite = !!org && org.role !== 'viewer'
-  const groups = useMemo(() => nav.filter(({ group }) => group !== 'Banking' || org?.role === 'owner' || org?.role === 'admin'), [org?.role])
+  const can = useCan()
+  const canWrite = !!org && quick.some(([to]) => can(moduleOf(to), 'create'))
+  // Pages the member may view. Banking also needs an unrestricted role (bank data spans every branch).
+  const groups = useMemo(() => nav
+    .filter(({ group }) => group !== 'Banking' || org?.role === 'owner' || org?.role === 'admin')
+    .map((g) => ({ ...g, items: g.items.filter(([to]) => to === '/' || can(moduleOf(to), 'view')) }))
+    .filter((g) => g.items.length), [org?.role, org?.permissions]) // eslint-disable-line react-hooks/exhaustive-deps
   const crumb = findNav(pathname, groups)
   const mainRef = useRef<HTMLElement>(null)
   useEffect(() => { setMenuOpen(false); mainRef.current?.scrollTo?.({ top: 0 }) }, [pathname]) // close the mobile menu after navigating
@@ -307,7 +326,7 @@ export function Layout() {
             <kbd className="rounded-md border border-slate-200 bg-slate-50 px-1.5 py-0.5 font-sans text-xs font-semibold text-slate-600">{isMac ? '⌘' : 'Ctrl'} K</kbd>
           </button>
           <button type="button" onClick={() => setPalette(true)} aria-label="Search" className="grid h-10 w-10 place-items-center rounded-xl text-slate-600 hover:bg-white md:hidden"><Icon name="search" size={20} /></button>
-          {org && <Notifications orgId={org.id} />}
+          {org && can('sales_invoices', 'view') && <Notifications orgId={org.id} />}
           <button type="button" onClick={() => setShortcuts(true)} aria-label="Help and keyboard shortcuts"
             className="hidden h-10 w-10 place-items-center rounded-xl text-slate-600 transition hover:bg-white hover:text-indigo-700 hover:shadow-card sm:grid"><Icon name="help" size={21} /></button>
           {canWrite && <QuickCreate />}

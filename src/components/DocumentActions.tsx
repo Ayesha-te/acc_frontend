@@ -1,17 +1,20 @@
 import { FormEvent, useState } from 'react'
 import { api, apiOpenPdf } from '../api/client'
 import { useToast } from '../lib/toast'
-import { useAuth } from '../features/auth/AuthContext'
+import { useAuth, useCan } from '../features/auth/AuthContext'
 import { Button, ErrorBox, Input, Label, Modal } from './ui'
 
 /** View PDF and Send email for an invoice, bill, credit note or statement. `base` is the API path without the trailing action. */
-export function DocumentActions({ pdfPath, emailPath, pdfQuery, emailBody, defaultTo, defaultSubject }: {
+export function DocumentActions({ pdfPath, emailPath, pdfQuery, emailBody, defaultTo, defaultSubject, module }: {
   pdfPath: string; emailPath: string; pdfQuery?: Record<string, string | undefined>; emailBody?: Record<string, string | undefined>
   defaultTo?: string; defaultSubject?: string
+  /** Permission module whose "export" right allows emailing (the server checks the same). */
+  module?: string
 }) {
   const { org } = useAuth()
   const toast = useToast()
-  const canSend = !!org && org.role !== 'viewer'
+  const can = useCan()
+  const canSend = !!org && can(module ?? (pdfPath.includes('/purchases/') ? 'purchase_invoices' : pdfPath.includes('/parties/') ? 'contacts' : 'sales_invoices'), 'export')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [emailing, setEmailing] = useState(false)

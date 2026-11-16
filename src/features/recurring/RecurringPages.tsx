@@ -9,14 +9,14 @@ import { money, todayDubai } from '../../lib/format'
 import { useFetch } from '../../lib/useFetch'
 import { useSubmit } from '../../lib/useSubmit'
 import { useToast } from '../../lib/toast'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 const profiles = resource('recurring')
 
 export function RecurringPage() {
   const { org } = useAuth()
   const toast = useToast()
-  const canWrite = !!org && org.role !== 'viewer'
+  const canWrite = useCan()('sales_invoices', 'create')
   const list = useFetch(() => profiles.page({ page_size: 100 }), [org?.id])
   const [error, setError] = useState<string | null>(null)
   const act = async (id: number, action: string, msg: string) => {
@@ -108,7 +108,7 @@ const expenseProfiles = resource('recurring-expenses')
 export function RecurringExpensesPage() {
   const { org } = useAuth()
   const toast = useToast()
-  const canWrite = !!org && org.role !== 'viewer'
+  const canWrite = useCan()('expenses', 'create')
   const list = useFetch(() => expenseProfiles.page({ page_size: 100 }), [org?.id])
   const [error, setError] = useState<string | null>(null)
   const act = async (id: number, action: string, msg: string) => {

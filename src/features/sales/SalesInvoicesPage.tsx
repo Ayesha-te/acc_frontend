@@ -11,7 +11,7 @@ import { money, periodPresets, todayDubai } from '../../lib/format'
 import { useDebounced } from '../../lib/useDebounced'
 import { useFetch } from '../../lib/useFetch'
 import { useToast } from '../../lib/toast'
-import { useAuth } from '../auth/AuthContext'
+import { useAuth, useCan } from '../auth/AuthContext'
 
 type Tab = 'all' | 'paid' | 'settled' | 'pending' | 'overdue'
 const TABS: Tab[] = ['paid', 'settled', 'pending', 'overdue']
@@ -51,7 +51,11 @@ function billingPeriods() {
  */
 export function SalesInvoicesPage() {
   const { org } = useAuth()
-  const canWrite = !!org && org.role !== 'viewer'
+  const can = useCan()
+  const canWrite = can('sales_invoices', 'create')
+  const canVoid = can('sales_invoices', 'void')
+  const canReceive = can('receipts', 'create')
+  const canExport = can('sales_invoices', 'export')
   const cur = org?.base_currency ?? ''
   const cash = (v: number | string) => `${cur} ${money(v)}`.trim()
   /** Amount with the currency code as a small prefix (keeps big figures on one line). */
@@ -297,9 +301,9 @@ export function SalesInvoicesPage() {
                 { value: 'pending', label: 'Pending', count: S?.pending.count ?? null },
                 { value: 'overdue', label: 'Overdue', count: S?.overdue.count ?? null }]} />
               <div className="ml-auto flex flex-wrap items-center gap-2">
-                <Button variant="ghost" onClick={exportCsv} disabled={exporting || !count}>
+                {canExport && <Button variant="ghost" onClick={exportCsv} disabled={exporting || !count}>
                   <Icon name="export" size={16} />{exporting ? 'Exporting…' : selected.size ? `Export (${selected.size})` : 'Export'}
-                </Button>
+                </Button>}
                 {canWrite && <Link to="/sales/new"><Button><Icon name="plus" size={16} strokeWidth={2.4} />New invoice</Button></Link>}
               </div>
             </div>
@@ -349,8 +353,8 @@ export function SalesInvoicesPage() {
                           <Dropdown label={`Actions for ${r.number}`} trigger={<Icon name="dots" size={20} strokeWidth={3} />} items={[
                             { label: 'View details', icon: 'eye', onClick: () => setOpen(r) },
                             { label: 'View PDF', icon: 'file', onClick: () => viewPdf(r) },
-                            { label: 'Receive payment', icon: 'receipt', onClick: () => navigate('/receipts/new'), hidden: !canWrite || st === 'paid' || r.status !== 'posted' },
-                            { label: 'Void', icon: 'ban', danger: true, onClick: () => voidRow(r), hidden: !canWrite || r.status !== 'posted' },
+                            { label: 'Receive payment', icon: 'receipt', onClick: () => navigate('/receipts/new'), hidden: !canReceive || st === 'paid' || r.status !== 'posted' },
+                            { label: 'Void', icon: 'ban', danger: true, onClick: () => voidRow(r), hidden: !canVoid || r.status !== 'posted' },
                           ]} />
                         </td>
                       </tr>
@@ -409,7 +413,7 @@ export function SalesInvoicesPage() {
                     </span>
                     <Dropdown label={`Actions for ${c.label}`} trigger={<Icon name="dots" size={20} strokeWidth={3} />} items={[
                       { label: 'Find invoices', icon: 'search', onClick: () => { setTab('all'); setSearch(c.label) } },
-                      { label: c.outstanding > 0 ? `Receive ${money(c.outstanding)}` : 'Receive payment', icon: 'receipt', onClick: () => navigate('/receipts/new'), hidden: !canWrite },
+                      { label: c.outstanding > 0 ? `Receive ${money(c.outstanding)}` : 'Receive payment', icon: 'receipt', onClick: () => navigate('/receipts/new'), hidden: !canReceive },
                     ]} />
                   </li>
                 ))}
