@@ -1,11 +1,12 @@
-import { FormEvent, useState } from 'react'
-import { Invitation, InviteResult, Member, Perms, team } from '../../api/endpoints'
+import { FormEvent, useMemo, useState } from 'react'
+import { AccessChange, Invitation, InviteResult, Member, PermCatalog, Perms, team } from '../../api/endpoints'
 import { Icon } from '../../components/icons'
 import { Badge, Button, Card, CardTitle, Drawer, Dropdown, EmptyState, ErrorBox, Input, KpiCard, Label, Modal, PageHeader, Spinner } from '../../components/ui'
 import { useFetch } from '../../lib/useFetch'
 import { useToast } from '../../lib/toast'
 import { useAuth, useCan } from '../auth/AuthContext'
 import { countPerms, PermissionGrid } from './PermissionGrid'
+import { actionLabel, diffPerms, effectivePerms, importantRevocations, permLabel } from './permDiff'
 
 const ROLES: { value: string; label: string; text: string }[] = [
   { value: 'owner', label: 'Owner', text: 'Everything, always. Can manage other owners.' },
@@ -60,8 +61,8 @@ export function UsersPage() {
             </tr></thead>
             <tbody>
               {list.map((m, i) => (
-                <tr key={m.id} className={`border-b border-slate-100 ${canManage && !m.is_self ? 'cursor-pointer hover:bg-indigo-50/50' : ''}`}
-                  onClick={() => canManage && !m.is_self && setEditing(m)}>
+                <tr key={m.id} className="cursor-pointer border-b border-slate-100 hover:bg-indigo-50/50" onClick={() => setEditing(m)}
+                  title={canManage && !m.is_self ? 'Edit role & permissions' : 'View effective access'}>
                   <td className="px-4 py-3">
                     <span className="flex items-center gap-3">
                       <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-bold ${['bg-indigo-100 text-indigo-700', 'bg-rose-100 text-rose-700', 'bg-amber-100 text-amber-700', 'bg-emerald-100 text-emerald-700'][i % 4]}`}>{initials(m.username)}</span>
@@ -78,7 +79,8 @@ export function UsersPage() {
                       <Dropdown label={`Actions for ${m.username}`} trigger={<Icon name="dots" size={20} strokeWidth={3} />} items={[
                         { label: 'Role & permissions', icon: 'settings', onClick: () => setEditing(m) },
                         { label: m.is_active ? 'Deactivate' : 'Activate', icon: m.is_active ? 'ban' : 'checkCircle',
-                          onClick: () => act(() => team.updateMember(m.id, { is_active: !m.is_active }), m.is_active ? `${m.username} deactivated` : `${m.username} activated`) },
+                          onClick: () => (m.is_active ? confirm(`Deactivate ${m.username}? They lose all access to ${org?.name} immediately, including any open sessions. Their role and permissions are kept for when you reactivate them.`) : true)
+                            && act(() => team.updateMember(m.id, { is_active: !m.is_active }), m.is_active ? `${m.username} deactivated` : `${m.username} activated`) },
                         { label: 'Remove from organization', icon: 'x', danger: true,
                           onClick: () => confirm(`Remove ${m.username} from ${org?.name}? Their account and everything they recorded stay; they just lose access here.`)
                             && act(() => team.removeMember(m.id), `${m.username} removed`) },
@@ -113,13 +115,15 @@ export function UsersPage() {
         </Card>
       )}
 
+      {canManage && catalog.data && <AccessHistory catalog={catalog.data} version={v} />}
+
       {inviting && catalog.data && (
         <InviteModal catalog={catalog.data} myRole={org?.role ?? ''} myPerms={myPerms} onClose={() => setInviting(false)}
           onDone={(r) => { setInviting(false); reload(); if (r.kind === 'member') toast.success(`${r.member.username} added`); else setLink(r) }} />
       )}
       {editing && catalog.data && (
-        <MemberDrawer member={editing} catalog={catalog.data} myRole={org?.role ?? ''} myPerms={myPerms} onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); reload() }} />
+        <MemberDrawer member={editing} catalog={catalog.data} myRole={org?.role ?? ''} myPerms={myPerms} canManage={canManage}
+          onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload() }} />
       )}
       {link && link.kind === 'invitation' && <LinkModal r={link} onClose={() => setLink(null)} />}
     </div>
@@ -190,37 +194,177 @@ function InviteModal({ catalog, myRole, myPerms, onClose, onDone }: {
   )
 }
 
-function MemberDrawer({ member, catalog, myRole, myPerms, onClose, onSaved }: {
-  member: Member; catalog: import('../../api/endpoints').PermCatalog; myRole: string; myPerms: Perms; onClose(): void; onSaved(): void
+/** Read-only, per-module summary of what someone can do: one line per module they can use, actions as chips. */
+function AccessSummary({ catalog, perms }: { catalog: PermCatalog; perms: Perms }) {
+  const rows = catalog.modules.filter((m) => (perms[m.key] ?? []).length)
+  if (!rows.length) return <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">No access to any module.</p>
+  return (
+    <ul className="divide-y divide-slate-100 rounded-2xl ring-1 ring-slate-200">
+      {rows.map((m) => (
+        <li key={m.key} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+          <span className="min-w-[10rem] flex-1 font-medium text-slate-800">{m.label}</span>
+          <span className="flex flex-wrap gap-1">
+            {catalog.actions.filter((a) => perms[m.key].includes(a)).map((a) => (
+              <span key={a} className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${['delete', 'void', 'approve', 'post', 'manage'].includes(a) ? 'bg-amber-100 text-amber-800' : 'bg-indigo-50 text-indigo-700'}`}>{actionLabel(a)}</span>
+            ))}
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function PermList({ catalog, keys, tone }: { catalog: PermCatalog; keys: string[]; tone: 'add' | 'remove' }) {
+  return (
+    <ul className="flex flex-wrap gap-1">
+      {keys.map((k) => (
+        <li key={k} className={`rounded-md px-1.5 py-0.5 text-xs font-semibold ${tone === 'add' ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+          {tone === 'add' ? '+ ' : '− '}{permLabel(catalog, k)}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function MemberDrawer({ member, catalog, myRole, myPerms, canManage, onClose, onSaved }: {
+  member: Member; catalog: PermCatalog; myRole: string; myPerms: Perms; canManage: boolean; onClose(): void; onSaved(): void
 }) {
   const toast = useToast()
   const [role, setRole] = useState(member.role)
   const [custom, setCustom] = useState<Perms | null>(member.custom_permissions ? member.permissions : null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState(false)
   const locked = member.role === 'owner' && myRole !== 'owner'
+  const editable = canManage && !member.is_self && !locked
+  const before = member.permissions
+  const after = useMemo(() => effectivePerms(catalog, role, role === 'owner' ? null : custom), [catalog, role, custom])
+  const { granted, revoked } = useMemo(() => diffPerms(catalog, before, after), [catalog, before, after])
+  const important = importantRevocations(revoked)
+  const changed = role !== member.role || granted.length > 0 || revoked.length > 0 || (custom !== null) !== member.custom_permissions
+  const history = useFetch(() => (canManage ? team.audit(member.id) : Promise.resolve([] as AccessChange[])), [member.id, canManage])
+
   const save = async () => {
-    setBusy(true); setError(null)
+    setConfirming(false); setBusy(true); setError(null)
     try {
       await team.updateMember(member.id, { role, permissions: role === 'owner' ? null : custom })
-      toast.success(`${member.username} updated`); onSaved()
+      toast.success(`${member.username} updated. The change applies immediately, including open sessions.`); onSaved()
     } catch (e: any) { setError(e.message) } finally { setBusy(false) }
   }
+  const requestSave = () => (important.length ? setConfirming(true) : save())
+
   return (
     <Drawer title={member.username} onClose={onClose}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
-          <span>{member.email || 'no email'}</span><Badge value={member.is_active ? 'Active' : 'Inactive'} tone={member.is_active ? 'paid' : 'void'} icon />
+          <span>{member.email || 'no email'}</span>
+          <Badge value={roleLabel(member.role)} tone={member.role === 'owner' || member.role === 'admin' ? 'open' : 'draft'} />
+          <Badge value={member.is_active ? 'Active' : 'Inactive'} tone={member.is_active ? 'paid' : 'void'} icon />
         </div>
         <ErrorBox error={error} />
-        {locked ? <p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Only an owner can change another owner.</p> : (
-          <>
-            <AccessEditor catalog={catalog} role={role} setRole={setRole} custom={custom} setCustom={setCustom} myRole={myRole} myPerms={myPerms} />
-            <div className="flex justify-end gap-2"><Button variant="ghost" onClick={onClose}>Cancel</Button><Button onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save changes'}</Button></div>
-          </>
+        {!editable && (
+          <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+            {member.is_self ? 'This is you. Nobody can change their own access; ask an owner.'
+              : locked ? 'Only an owner can change another owner.'
+              : 'You can see this person’s access but not change it (that needs User management: Manage).'}
+          </p>
+        )}
+        {editable && (
+          <AccessEditor catalog={catalog} role={role} setRole={setRole} custom={custom} setCustom={setCustom} myRole={myRole} myPerms={myPerms} />
+        )}
+
+        <section>
+          <h3 className="mb-2 text-sm font-semibold text-slate-700">{editable && changed ? 'Effective access after saving' : 'Effective access'}</h3>
+          {(editable ? role : member.role) === 'owner'
+            ? <p className="rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">Owner: full access to every module and action, always. Custom permissions never restrict an owner.</p>
+            : <AccessSummary catalog={catalog} perms={editable ? after : before} />}
+          {!member.is_active && <p className="mt-2 text-xs text-slate-500">Inactive members have no access at all until they are reactivated.</p>}
+        </section>
+
+        {editable && changed && (granted.length > 0 || revoked.length > 0) && (
+          <section className="space-y-2 rounded-2xl bg-slate-50 p-3">
+            <h3 className="text-sm font-semibold text-slate-700">Changes</h3>
+            {granted.length > 0 && <PermList catalog={catalog} keys={granted} tone="add" />}
+            {revoked.length > 0 && <PermList catalog={catalog} keys={revoked} tone="remove" />}
+          </section>
+        )}
+
+        {editable && (
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button onClick={requestSave} disabled={busy || !changed}>{busy ? 'Saving…' : 'Save changes'}</Button>
+          </div>
+        )}
+
+        {canManage && (
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-slate-700">Access history</h3>
+            {history.data && !history.data.length ? <p className="text-sm text-slate-500">No recorded changes yet.</p>
+              : <HistoryList catalog={catalog} rows={history.data ?? []} showTarget={false} />}
+            {history.loading && !history.data && <Spinner />}
+          </section>
         )}
       </div>
+
+      {confirming && (
+        <Modal title="Remove important permissions?" onClose={() => setConfirming(false)}>
+          <div className="space-y-3 text-sm">
+            <p className="text-slate-600"><strong>{member.username}</strong> will immediately lose these permissions, including in sessions that are already open:</p>
+            <PermList catalog={catalog} keys={important} tone="remove" />
+            {revoked.length > important.length && <p className="text-xs text-slate-500">…and {revoked.length - important.length} other permission(s), listed in the drawer.</p>}
+            <p className="text-xs text-slate-500">Nothing they recorded is changed or deleted.</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirming(false)}>Go back</Button>
+              <Button onClick={save} disabled={busy}>Remove and save</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </Drawer>
+  )
+}
+
+const fmtTime = (iso: string) => new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+
+function HistoryList({ catalog, rows, showTarget }: { catalog: PermCatalog; rows: AccessChange[]; showTarget: boolean }) {
+  return (
+    <ul className="divide-y divide-slate-100">
+      {rows.map((r) => {
+        const d = r.details
+        return (
+          <li key={r.id} className="space-y-1 py-2.5 text-sm">
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span className="font-semibold text-slate-900">{r.event_label}</span>
+              {showTarget && <span className="text-slate-700">· {r.target || 'unknown'}</span>}
+              {d.role && d.role[0] && d.role[1] && <span className="text-slate-600">· {roleLabel(d.role[0])} → {roleLabel(d.role[1])}</span>}
+              {d.role && !d.role[0] && d.role[1] && <span className="text-slate-600">· as {roleLabel(d.role[1])}</span>}
+              {d.custom && d.custom[0] !== d.custom[1] && <span className="text-slate-600">· {d.custom[1] ? 'custom permissions' : 'back to role preset'}</span>}
+            </div>
+            <div className="text-xs text-slate-500">{fmtTime(r.at)}{r.actor ? ` · by ${r.actor}` : ''}</div>
+            {r.event !== 'member_added' && r.event !== 'invitation_accepted' && d.granted && d.granted.length > 0 && <PermList catalog={catalog} keys={d.granted} tone="add" />}
+            {r.event !== 'removed' && d.revoked && d.revoked.length > 0 && <PermList catalog={catalog} keys={d.revoked} tone="remove" />}
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+/** Organization-wide access audit trail (owners / members with User management: Manage). */
+function AccessHistory({ catalog, version }: { catalog: PermCatalog; version: number }) {
+  const { org } = useAuth()
+  const rows = useFetch(() => team.audit(), [org?.id, version])
+  const [all, setAll] = useState(false)
+  const list = rows.data ?? []
+  return (
+    <Card className="mt-5 !rounded-3xl !p-5">
+      <CardTitle icon="clock" title="Access history" right={list.length > 8 && <Button variant="ghost" onClick={() => setAll((x) => !x)}>{all ? 'Show less' : `Show all ${list.length}`}</Button>} />
+      <p className="mb-2 text-xs text-slate-500">Every change to members, roles and permissions: who made it and when.</p>
+      <ErrorBox error={rows.error} />
+      {rows.data && !list.length ? <EmptyState title="No changes recorded yet" text="Role, permission and status changes will appear here." />
+        : <HistoryList catalog={catalog} rows={all ? list : list.slice(0, 8)} showTarget />}
+      {rows.loading && !rows.data && <Spinner />}
+    </Card>
   )
 }
 

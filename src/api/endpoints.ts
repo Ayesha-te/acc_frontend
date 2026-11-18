@@ -125,6 +125,12 @@ export const team = {
   resend: (id: number) => api<InviteResult>(`/invitations/${id}/resend/`, { method: 'POST', body: {} }),
   cancel: (id: number) => api<Invitation>(`/invitations/${id}/cancel/`, { method: 'POST', body: {} }),
   catalog: () => api<PermCatalog>('/permissions/catalog/'),
+  /** Access audit trail (needs users.manage). `member` narrows it to one membership. */
+  audit: (member?: number) => api<AccessChange[]>('/members/audit/', { query: { member } }),
+}
+export type AccessChange = {
+  id: number; at: string; event: string; event_label: string; actor: string | null; target: string; membership: number | null
+  details: { role?: [string | null, string | null]; is_active?: [boolean, boolean]; custom?: [boolean, boolean]; granted?: string[]; revoked?: string[] }
 }
 /** Public invitation endpoints (no login). The token travels in the request body, never in a URL. */
 export const invitations = {

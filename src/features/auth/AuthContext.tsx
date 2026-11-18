@@ -38,6 +38,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (authed) refreshOrgs().finally(() => setReady(true))
   }, [authed, refreshOrgs])
+  // Permissions can change while someone is signed in. The server enforces the change on the very next request; reload the
+  // effective permissions when the server refuses something, when the tab regains focus, and every few minutes, so the
+  // UI follows. Throttled so a page that hits several 403s at once triggers one reload.
+  useEffect(() => {
+    if (!authed) return
+    let last = 0
+    const reload = () => {
+      if (Date.now() - last < 5000) return
+      last = Date.now()
+      refreshOrgs().catch(() => undefined)
+    }
+    const onVisible = () => { if (document.visibilityState === 'visible') reload() }
+    window.addEventListener('auth:forbidden', reload)
+    document.addEventListener('visibilitychange', onVisible)
+    const timer = window.setInterval(onVisible, 120000)
+    return () => {
+      window.removeEventListener('auth:forbidden', reload)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.clearInterval(timer)
+    }
+  }, [authed, refreshOrgs])
 
   const value: Ctx = {
     authed,

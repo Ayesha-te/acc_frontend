@@ -1,7 +1,20 @@
 import { Perms, PermCatalog } from '../../api/endpoints'
+import { actionLabel } from './permDiff'
 
-const ACTION_LABEL: Record<string, string> = { view: 'View', create: 'Create', edit: 'Edit', delete: 'Delete', post: 'Post / approve', void: 'Void', export: 'Export', manage: 'Manage' }
-export const actionLabel = (a: string) => ACTION_LABEL[a] ?? a
+export { actionLabel }
+
+/** What each column means; shown as the header tooltip and in the legend under the grid. */
+export const ACTION_HELP: Record<string, string> = {
+  view: 'See records and open them.',
+  create: 'Record new documents or entries.',
+  edit: 'Change existing records (also called update). Does not include delete, void, post or approve.',
+  delete: 'Remove records permanently (only where the module allows it).',
+  post: 'Finalise: convert orders and quotes into invoices or bills.',
+  approve: 'Approve or reject documents waiting for approval.',
+  void: 'Cancel posted documents (reverses their journal entries).',
+  export: 'Download, export and email.',
+  manage: 'Module administration (settings, users, opening balances, costing).',
+}
 
 /** Count of granted (module, action) pairs, for summaries. */
 export const countPerms = (p: Perms) => Object.values(p).reduce((n, a) => n + a.length, 0)
@@ -40,7 +53,7 @@ export function PermissionGrid({ catalog, value, onChange, limit, readOnly }: {
         <thead>
           <tr className="bg-slate-50 text-left">
             <th className="sticky left-0 bg-slate-50 px-3 py-2.5">Module</th>
-            {catalog.actions.map((a) => <th key={a} className="px-2 py-2.5 text-center">{actionLabel(a)}</th>)}
+            {catalog.actions.map((a) => <th key={a} title={ACTION_HELP[a]} className="px-2 py-2.5 text-center">{actionLabel(a)}</th>)}
             {!readOnly && <th className="px-2 py-2.5 text-center">All</th>}
           </tr>
         </thead>
@@ -75,6 +88,11 @@ export function PermissionGrid({ catalog, value, onChange, limit, readOnly }: {
           ])}
         </tbody>
       </table>
+      <dl className="grid gap-x-4 gap-y-1 border-t border-slate-100 bg-slate-50/60 px-3 py-2.5 text-xs text-slate-600 sm:grid-cols-2">
+        {catalog.actions.map((a) => (
+          <div key={a}><dt className="inline font-semibold text-slate-700">{actionLabel(a)}: </dt><dd className="inline">{ACTION_HELP[a]}</dd></div>
+        ))}
+      </dl>
     </div>
   )
 }

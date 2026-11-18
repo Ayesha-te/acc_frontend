@@ -11,9 +11,9 @@ export function ApprovalPanel({ path, id, status, reason, onChanged }: { path: s
   const [why, setWhy] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const canDecide = useCan()(path === 'expenses' ? 'expenses' : 'purchase_invoices', 'approve')  // hooks before any early return
   if (status === 'rejected') return <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">Rejected{reason ? `: ${reason}` : ''}. Nothing was posted.</p>
   if (status !== 'pending') return null
-  const canDecide = useCan()(path === 'expenses' ? 'expenses' : 'purchase_invoices', 'post')
   const run = async (fn: () => Promise<unknown>, ok: string) => {
     setBusy(true); setError(null)
     try { await fn(); toast.success(ok); onChanged() } catch (e: any) { setError(e.message) } finally { setBusy(false) }
@@ -33,7 +33,7 @@ export function ApprovalPanel({ path, id, status, reason, onChanged }: { path: s
           <Button disabled={busy} onClick={() => run(() => approvals.approve(path, id), 'Approved and posted')}>Approve</Button>
           <Button variant="subtle" disabled={busy} onClick={() => setRejecting(true)}>Reject…</Button>
         </div>
-      )) : <p className="text-slate-600">An owner or admin has to approve it.</p>}
+      )) : <p className="text-slate-600">Someone with approval permission has to approve it.</p>}
     </div>
   )
 }

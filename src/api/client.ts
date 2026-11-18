@@ -75,6 +75,9 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => null)
   if (res.status === 401) { session.token = null; window.dispatchEvent(new Event('auth:expired')) }
+  // A 403 may mean an owner just changed this person's permissions: let the auth context reload them so menus and buttons
+  // catch up with what the server now enforces.
+  if (res.status === 403) window.dispatchEvent(new Event('auth:forbidden'))
   if (!res.ok) throw new ApiError(res.status, describe(data), data?.code, data)
   return data as T
 }
